@@ -12,7 +12,54 @@
 static WebServer server(80);
 
 // ---------------------------------------------------------------------------
-//  HTML page (embedded PROGMEM)
+//  AP-mode page (minimal WiFi setup only)
+// ---------------------------------------------------------------------------
+static const char PAGE_AP_HTML[] PROGMEM = R"rawliteral(
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>BambuHelper Setup</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0D1117;color:#E6EDF3;padding:16px;max-width:420px;margin:0 auto}
+h1{color:#58A6FF;font-size:22px;margin-bottom:6px}
+.sub{color:#8B949E;font-size:13px;margin-bottom:20px}
+.card{background:#161B22;border:1px solid #30363D;border-radius:8px;padding:16px;margin-bottom:16px}
+.card h2{color:#58A6FF;font-size:16px;margin-bottom:12px}
+label{display:block;color:#8B949E;font-size:13px;margin-bottom:4px;margin-top:10px}
+input[type=text],input[type=password]{width:100%;padding:8px 10px;border:1px solid #30363D;border-radius:6px;background:#0D1117;color:#E6EDF3;font-size:14px;outline:none}
+input:focus{border-color:#58A6FF}
+.btn{display:block;width:100%;padding:12px;border:none;border-radius:6px;font-size:15px;font-weight:600;cursor:pointer;margin-top:16px;text-align:center;background:#238636;color:#fff}
+.btn:hover{background:#2EA043}
+</style>
+</head><body>
+<h1>BambuHelper</h1>
+<p class="sub">Initial Setup</p>
+<div class="card">
+  <h2>Connect to WiFi</h2>
+  <p style="font-size:12px;color:#8B949E;margin-bottom:10px">Enter your WiFi credentials. After saving, the device will restart and connect to your network. You can then access the full settings at the device's IP address.</p>
+  <label for="ssid">WiFi SSID</label>
+  <input type="text" id="ssid" placeholder="Your WiFi network name">
+  <label for="pass">WiFi Password</label>
+  <input type="password" id="pass" placeholder="WiFi password">
+  <button class="btn" onclick="saveWifi()">Save &amp; Connect</button>
+  <div id="msg" style="margin-top:10px;font-size:13px;text-align:center"></div>
+</div>
+<script>
+function saveWifi(){
+  var s=document.getElementById('ssid').value,p=document.getElementById('pass').value;
+  if(!s){document.getElementById('msg').innerHTML='<span style="color:#F85149">Enter SSID</span>';return;}
+  document.getElementById('msg').innerHTML='<span style="color:#58A6FF">Saving...</span>';
+  var d=new URLSearchParams();d.append('ssid',s);d.append('pass',p);
+  fetch('/save/wifi',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:d.toString()})
+    .then(function(){document.body.innerHTML='<div style="text-align:center;padding-top:80px"><h2 style="color:#3FB950">WiFi Saved!</h2><p style="color:#8B949E;margin-top:10px">Restarting... Connect to your WiFi and open the device IP in a browser.</p></div>';})
+    .catch(function(){document.getElementById('msg').innerHTML='<span style="color:#F85149">Error</span>';});
+}
+</script>
+</body></html>
+)rawliteral";
+
+// ---------------------------------------------------------------------------
+//  Main page (full settings with collapsible sections)
 // ---------------------------------------------------------------------------
 static const char PAGE_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
@@ -30,11 +77,6 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
   }
   h1 { color: #58A6FF; font-size: 22px; margin-bottom: 6px; }
   .subtitle { color: #8B949E; font-size: 13px; margin-bottom: 20px; }
-  .card {
-    background: #161B22; border: 1px solid #30363D; border-radius: 8px;
-    padding: 16px; margin-bottom: 16px;
-  }
-  .card h2 { color: #58A6FF; font-size: 16px; margin-bottom: 12px; }
   label { display: block; color: #8B949E; font-size: 13px; margin-bottom: 4px; margin-top: 10px; }
   input[type=text], input[type=password], input[type=number], select {
     width: 100%; padding: 8px 10px; border: 1px solid #30363D;
@@ -88,6 +130,29 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
   .theme-btn:hover { border-color: #58A6FF; color: #E6EDF3; }
   .global-colors { display: flex; gap: 16px; margin-bottom: 8px; }
   .global-colors .color-row { margin: 0; }
+
+  /* Collapsible sections */
+  .section { margin-bottom: 12px; }
+  .section-header {
+    display: flex; justify-content: space-between; align-items: center;
+    background: #161B22; border: 1px solid #30363D; border-radius: 8px;
+    padding: 12px 16px; cursor: pointer; user-select: none;
+  }
+  .section-header h2 { color: #58A6FF; font-size: 16px; margin: 0; }
+  .section-header .arrow {
+    transition: transform 0.3s ease; font-size: 12px; color: #8B949E;
+  }
+  .section-header .arrow.open { transform: rotate(90deg); }
+  .section-content {
+    max-height: 0; overflow: hidden; opacity: 0;
+    transition: max-height 0.4s ease, opacity 0.3s ease;
+  }
+  .section-content.open { max-height: 5000px; opacity: 1; }
+  .section-body {
+    background: #161B22; border: 1px solid #30363D; border-top: none;
+    border-radius: 0 0 8px 8px; padding: 16px;
+  }
+  .section.open .section-header { border-radius: 8px 8px 0 0; }
 </style>
 </head>
 <body>
@@ -95,263 +160,300 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
 <p class="subtitle">Bambu Lab Printer Monitor</p>
 <div id="toast" class="toast">Applied!</div>
 
-<!-- ===== WiFi & Printer (requires restart) ===== -->
-<form method="POST" action="/save">
-<div class="card">
-  <h2>WiFi Settings</h2>
-  <label for="ssid">WiFi SSID</label>
-  <input type="text" name="ssid" id="ssid" value="%SSID%" placeholder="Your WiFi name">
-  <label for="pass">WiFi Password</label>
-  <input type="password" name="pass" id="pass" value="%PASS%" placeholder="WiFi password">
+<!-- ===== Section 1: Printer Settings ===== -->
+<div class="section" id="s-printer">
+  <div class="section-header" onclick="toggleSection('printer')">
+    <h2>Printer Settings</h2>
+    <span class="arrow" id="arr-printer">&#9654;</span>
+  </div>
+  <div class="section-content" id="sec-printer">
+    <div class="section-body">
+      <div id="printerStatus" class="%STATUS_CLASS%">%STATUS_TEXT%</div>
+      <div class="check-row">
+        <input type="checkbox" id="enabled" value="1" %ENABLED%>
+        <label for="enabled">Enable Monitoring</label>
+      </div>
+
+      <label for="connmode">Connection Mode</label>
+      <select id="connmode" onchange="toggleConnMode()">
+        <option value="local" %MODE_LOCAL%>LAN Direct (P1/X1/A1)</option>
+        <option value="cloud" %MODE_CLOUD%>Bambu Cloud (H2/P2S)</option>
+        <option value="cloud_all" %MODE_CLOUD_ALL%>Bambu Cloud (All printers)</option>
+      </select>
+
+      <div id="localFields">
+        <label for="pname">Printer Name</label>
+        <input type="text" id="pname" value="%PNAME%" placeholder="My P1S" maxlength="23">
+        <label for="ip">Printer IP Address</label>
+        <input type="text" id="ip" value="%IP%" placeholder="192.168.1.xxx">
+        <label for="serial">Serial Number</label>
+        <input type="text" id="serial" value="%SERIAL%" placeholder="01P00A000000000" maxlength="19">
+        <label for="code">LAN Access Code</label>
+        <input type="text" id="code" value="%CODE%" placeholder="12345678" maxlength="8">
+      </div>
+
+      <div id="cloudFields" style="display:none">
+        <p id="cloudDesc" style="font-size:12px;color:#8B949E;margin:10px 0">Connects via Bambu Cloud.<br>Token valid ~3 months. Your password is NOT stored.</p>
+        <div id="cloudLoginSection">
+          <label for="cl_email">Bambu Account Email</label>
+          <input type="text" id="cl_email" value="%CL_EMAIL%" placeholder="user@example.com">
+          <label for="cl_pass">Password</label>
+          <input type="password" id="cl_pass" placeholder="Account password">
+          <button type="button" class="btn btn-blue" style="margin-top:10px" onclick="cloudLogin()">Login to Bambu Cloud</button>
+        </div>
+        <div id="cloud2FA" style="display:none;margin-top:10px">
+          <label for="cl_code">Verification Code (email or authenticator app)</label>
+          <input type="text" id="cl_code" placeholder="123456" maxlength="6">
+          <button type="button" class="btn btn-blue" style="margin-top:8px" onclick="cloudVerify()">Verify Code</button>
+        </div>
+        <div id="cloudStatus" style="margin-top:8px;font-size:13px;color:#8B949E">%CLOUD_STATUS%</div>
+        <div id="cloudDevices" style="display:none;margin-top:10px">
+          <label for="cl_device">Select Printer</label>
+          <select id="cl_device" onchange="selectCloudDevice()"></select>
+        </div>
+        <input type="hidden" id="cl_serial" value="%SERIAL%">
+        <input type="hidden" id="cl_pname" value="%PNAME%">
+        <button type="button" class="btn btn-danger" style="margin-top:10px;display:none;font-size:12px;padding:6px"
+                id="cloudLogoutBtn" onclick="cloudLogout()">Logout from Cloud</button>
+        <div id="pasteTokenSection" style="margin-top:16px;padding-top:12px;border-top:1px solid #30363D">
+          <p style="font-size:12px;color:#8B949E;margin-bottom:8px">
+            <b>Having trouble logging in?</b> (Cloudflare may block ESP32)<br>
+            Get your token with the Python script or browser DevTools, then paste it here.
+            <a href="https://github.com/rafalz/BambuHelper#getting-a-cloud-token" style="color:#58A6FF" target="_blank">Instructions</a>
+          </p>
+          <label for="cl_token">Access Token</label>
+          <textarea id="cl_token" rows="3" style="width:100%;padding:8px;border:1px solid #30363D;border-radius:6px;background:#0D1117;color:#E6EDF3;font-size:11px;font-family:monospace;resize:vertical" placeholder="Paste your Bambu Cloud token here..."></textarea>
+          <button type="button" class="btn btn-blue" style="margin-top:8px" onclick="pasteToken()">Save Token &amp; Fetch Printers</button>
+          <div id="pasteStatus" style="margin-top:6px;font-size:13px;color:#8B949E"></div>
+        </div>
+        <div id="manualSerial" style="margin-top:10px">
+          <label for="cl_manual_serial">Printer Serial Number</label>
+          <input type="text" id="cl_manual_serial" value="%SERIAL%" placeholder="01P00A000000000" maxlength="19"
+                 oninput="document.getElementById('cl_serial').value=this.value">
+          <label for="cl_manual_name">Printer Name</label>
+          <input type="text" id="cl_manual_name" value="%PNAME%" placeholder="My Printer" maxlength="23"
+                 oninput="document.getElementById('cl_pname').value=this.value">
+          <p style="font-size:11px;color:#8B949E;margin-top:6px">Find your serial in Bambu Handy or on the printer's label.</p>
+        </div>
+      </div>
+
+      <div id="liveStats"></div>
+      <button type="button" class="btn btn-primary" onclick="savePrinter()">Save Printer Settings</button>
+    </div>
+  </div>
 </div>
 
-<div class="card">
-  <h2>Network</h2>
-  <label for="netmode">IP Assignment</label>
-  <select name="netmode" id="netmode" onchange="toggleStatic()">
-    <option value="dhcp" %NET_DHCP%>DHCP (automatic)</option>
-    <option value="static" %NET_STATIC%>Static IP</option>
-  </select>
-  <div id="staticFields" style="display:none">
-    <label for="net_ip">IP Address</label>
-    <input type="text" name="net_ip" id="net_ip" value="%NET_IP%" placeholder="192.168.1.100">
-    <label for="net_gw">Gateway</label>
-    <input type="text" name="net_gw" id="net_gw" value="%NET_GW%" placeholder="192.168.1.1">
-    <label for="net_sn">Subnet Mask</label>
-    <input type="text" name="net_sn" id="net_sn" value="%NET_SN%" placeholder="255.255.255.0">
-    <label for="net_dns">DNS Server</label>
-    <input type="text" name="net_dns" id="net_dns" value="%NET_DNS%" placeholder="8.8.8.8">
+<!-- ===== Section 2: Display ===== -->
+<div class="section" id="s-display">
+  <div class="section-header" onclick="toggleSection('display')">
+    <h2>Display</h2>
+    <span class="arrow" id="arr-display">&#9654;</span>
   </div>
-  <div class="check-row">
-    <input type="checkbox" name="showip" id="showip" value="1" %SHOWIP%>
-    <label for="showip">Show IP at startup (3s)</label>
+  <div class="section-content" id="sec-display">
+    <div class="section-body">
+      <label for="bright">Brightness: <span id="brightVal">%BRIGHT%</span></label>
+      <input type="range" id="bright" min="10" max="255" value="%BRIGHT%"
+             oninput="document.getElementById('brightVal').textContent=this.value">
+
+      <label for="rotation">Screen Rotation</label>
+      <select id="rotation">
+        <option value="0" %ROT0%>0&deg; (default)</option>
+        <option value="1" %ROT1%>90&deg;</option>
+        <option value="2" %ROT2%>180&deg;</option>
+        <option value="3" %ROT3%>270&deg;</option>
+      </select>
+
+      <label for="fmins">Display off after print complete (minutes, 0 = never)</label>
+      <input type="number" id="fmins" min="0" max="999" value="%FMINS%">
+      <div class="check-row">
+        <input type="checkbox" id="keepon" value="1" %KEEPON%>
+        <label for="keepon">Keep display always on (override timeout)</label>
+      </div>
+
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid #30363D">
+        <h3 style="color:#58A6FF;font-size:14px;margin-bottom:10px">Gauge Colors</h3>
+        <div class="theme-bar">
+          <button type="button" class="theme-btn" onclick="applyTheme('default')">Default</button>
+          <button type="button" class="theme-btn" onclick="applyTheme('mono_green')">Mono Green</button>
+          <button type="button" class="theme-btn" onclick="applyTheme('neon')">Neon</button>
+          <button type="button" class="theme-btn" onclick="applyTheme('warm')">Warm</button>
+          <button type="button" class="theme-btn" onclick="applyTheme('ocean')">Ocean</button>
+        </div>
+
+        <div class="global-colors">
+          <div class="color-row">
+            <label>Background</label>
+            <input type="color" id="clr_bg" value="%CLR_BG%">
+          </div>
+          <div class="color-row">
+            <label>Track</label>
+            <input type="color" id="clr_track" value="%CLR_TRACK%">
+          </div>
+        </div>
+
+        <div class="gauge-section"><h3>Progress</h3><div class="color-row">
+          <label>Arc</label><input type="color" id="prg_a" value="%PRG_A%">
+          <label>Label</label><input type="color" id="prg_l" value="%PRG_L%">
+          <label>Value</label><input type="color" id="prg_v" value="%PRG_V%">
+        </div></div>
+        <div class="gauge-section"><h3>Nozzle</h3><div class="color-row">
+          <label>Arc</label><input type="color" id="noz_a" value="%NOZ_A%">
+          <label>Label</label><input type="color" id="noz_l" value="%NOZ_L%">
+          <label>Value</label><input type="color" id="noz_v" value="%NOZ_V%">
+        </div></div>
+        <div class="gauge-section"><h3>Bed</h3><div class="color-row">
+          <label>Arc</label><input type="color" id="bed_a" value="%BED_A%">
+          <label>Label</label><input type="color" id="bed_l" value="%BED_L%">
+          <label>Value</label><input type="color" id="bed_v" value="%BED_V%">
+        </div></div>
+        <div class="gauge-section"><h3>Part Fan</h3><div class="color-row">
+          <label>Arc</label><input type="color" id="pfn_a" value="%PFN_A%">
+          <label>Label</label><input type="color" id="pfn_l" value="%PFN_L%">
+          <label>Value</label><input type="color" id="pfn_v" value="%PFN_V%">
+        </div></div>
+        <div class="gauge-section"><h3>Aux Fan</h3><div class="color-row">
+          <label>Arc</label><input type="color" id="afn_a" value="%AFN_A%">
+          <label>Label</label><input type="color" id="afn_l" value="%AFN_L%">
+          <label>Value</label><input type="color" id="afn_v" value="%AFN_V%">
+        </div></div>
+        <div class="gauge-section"><h3>Chamber Fan</h3><div class="color-row">
+          <label>Arc</label><input type="color" id="cfn_a" value="%CFN_A%">
+          <label>Label</label><input type="color" id="cfn_l" value="%CFN_L%">
+          <label>Value</label><input type="color" id="cfn_v" value="%CFN_V%">
+        </div></div>
+      </div>
+
+      <button type="button" class="btn btn-blue" onclick="applyDisplay()">Apply Display Settings</button>
+    </div>
   </div>
-  <label for="tz">Timezone</label>
-  <select name="tz" id="tz">
-    <option value="-720" %TZ_N720%>UTC-12:00</option>
-    <option value="-660" %TZ_N660%>UTC-11:00</option>
-    <option value="-600" %TZ_N600%>UTC-10:00 (Hawaii)</option>
-    <option value="-540" %TZ_N540%>UTC-9:00 (Alaska)</option>
-    <option value="-480" %TZ_N480%>UTC-8:00 (Pacific)</option>
-    <option value="-420" %TZ_N420%>UTC-7:00 (Mountain)</option>
-    <option value="-360" %TZ_N360%>UTC-6:00 (Central)</option>
-    <option value="-300" %TZ_N300%>UTC-5:00 (Eastern)</option>
-    <option value="-240" %TZ_N240%>UTC-4:00 (Atlantic)</option>
-    <option value="-210" %TZ_N210%>UTC-3:30 (Newfoundland)</option>
-    <option value="-180" %TZ_N180%>UTC-3:00 (Brazil)</option>
-    <option value="-120" %TZ_N120%>UTC-2:00</option>
-    <option value="-60" %TZ_N60%>UTC-1:00 (Azores)</option>
-    <option value="0" %TZ_0%>UTC+0:00 (London)</option>
-    <option value="60" %TZ_60%>UTC+1:00 (Berlin/Paris)</option>
-    <option value="120" %TZ_120%>UTC+2:00 (Helsinki/Cairo)</option>
-    <option value="180" %TZ_180%>UTC+3:00 (Moscow)</option>
-    <option value="210" %TZ_210%>UTC+3:30 (Tehran)</option>
-    <option value="240" %TZ_240%>UTC+4:00 (Dubai)</option>
-    <option value="270" %TZ_270%>UTC+4:30 (Kabul)</option>
-    <option value="300" %TZ_300%>UTC+5:00 (Karachi)</option>
-    <option value="330" %TZ_330%>UTC+5:30 (India)</option>
-    <option value="345" %TZ_345%>UTC+5:45 (Nepal)</option>
-    <option value="360" %TZ_360%>UTC+6:00 (Dhaka)</option>
-    <option value="420" %TZ_420%>UTC+7:00 (Bangkok)</option>
-    <option value="480" %TZ_480%>UTC+8:00 (Singapore)</option>
-    <option value="540" %TZ_540%>UTC+9:00 (Tokyo)</option>
-    <option value="570" %TZ_570%>UTC+9:30 (Adelaide)</option>
-    <option value="600" %TZ_600%>UTC+10:00 (Sydney)</option>
-    <option value="660" %TZ_660%>UTC+11:00</option>
-    <option value="720" %TZ_720%>UTC+12:00 (Auckland)</option>
-  </select>
 </div>
 
-<div class="card">
-  <h2>Printer Settings</h2>
-  <div id="printerStatus" class="%STATUS_CLASS%">%STATUS_TEXT%</div>
-  <div class="check-row">
-    <input type="checkbox" name="enabled" id="enabled" value="1" %ENABLED%>
-    <label for="enabled">Enable Monitoring</label>
+<!-- ===== Section 3: Diagnostics ===== -->
+<div class="section" id="s-diag">
+  <div class="section-header" onclick="toggleSection('diag')">
+    <h2>Diagnostics</h2>
+    <span class="arrow" id="arr-diag">&#9654;</span>
   </div>
-
-  <label for="connmode">Connection Mode</label>
-  <select name="connmode" id="connmode" onchange="toggleConnMode()">
-    <option value="local" %MODE_LOCAL%>LAN Direct (P1/X1/A1)</option>
-    <option value="cloud" %MODE_CLOUD%>Bambu Cloud (H2/P2S)</option>
-    <option value="cloud_all" %MODE_CLOUD_ALL%>Bambu Cloud (All printers)</option>
-  </select>
-
-  <div id="localFields">
-    <label for="pname">Printer Name</label>
-    <input type="text" name="pname" id="pname" value="%PNAME%" placeholder="My P1S" maxlength="23">
-    <label for="ip">Printer IP Address</label>
-    <input type="text" name="ip" id="ip" value="%IP%" placeholder="192.168.1.xxx">
-    <label for="serial">Serial Number</label>
-    <input type="text" name="serial" id="serial" value="%SERIAL%" placeholder="01P00A000000000" maxlength="19">
-    <label for="code">LAN Access Code</label>
-    <input type="text" name="code" id="code" value="%CODE%" placeholder="12345678" maxlength="8">
+  <div class="section-content" id="sec-diag">
+    <div class="section-body">
+      <div class="check-row">
+        <input type="checkbox" id="dbglog" onchange="toggleDebug(this.checked)" %DBGLOG%>
+        <label for="dbglog">Verbose Serial logging (USB)</label>
+      </div>
+      <div id="diagInfo" style="margin-top:10px;font-size:12px;color:#8B949E"></div>
+    </div>
   </div>
+</div>
 
-  <div id="cloudFields" style="display:none">
-    <p id="cloudDesc" style="font-size:12px;color:#8B949E;margin:10px 0">Connects via Bambu Cloud.<br>Token valid ~3 months. Your password is NOT stored.</p>
-    <div id="cloudLoginSection">
-      <label for="cl_email">Bambu Account Email</label>
-      <input type="text" id="cl_email" value="%CL_EMAIL%" placeholder="user@example.com">
-      <label for="cl_pass">Password</label>
-      <input type="password" id="cl_pass" placeholder="Account password">
-      <button type="button" class="btn btn-blue" style="margin-top:10px" onclick="cloudLogin()">Login to Bambu Cloud</button>
-    </div>
-    <div id="cloud2FA" style="display:none;margin-top:10px">
-      <label for="cl_code">Verification Code (email or authenticator app)</label>
-      <input type="text" id="cl_code" placeholder="123456" maxlength="6">
-      <button type="button" class="btn btn-blue" style="margin-top:8px" onclick="cloudVerify()">Verify Code</button>
-    </div>
-    <div id="cloudStatus" style="margin-top:8px;font-size:13px;color:#8B949E">%CLOUD_STATUS%</div>
-    <div id="cloudDevices" style="display:none;margin-top:10px">
-      <label for="cl_device">Select Printer</label>
-      <select id="cl_device" onchange="selectCloudDevice()"></select>
-    </div>
-    <input type="hidden" name="cl_serial" id="cl_serial" value="%SERIAL%">
-    <input type="hidden" name="cl_pname" id="cl_pname" value="%PNAME%">
-    <button type="button" class="btn btn-danger" style="margin-top:10px;display:none;font-size:12px;padding:6px"
-            id="cloudLogoutBtn" onclick="cloudLogout()">Logout from Cloud</button>
-    <div id="pasteTokenSection" style="margin-top:16px;padding-top:12px;border-top:1px solid #30363D">
-      <p style="font-size:12px;color:#8B949E;margin-bottom:8px">
-        <b>Having trouble logging in?</b> (Cloudflare may block ESP32)<br>
-        Get your token with the Python script or browser DevTools, then paste it here.
-        <a href="https://github.com/rafalz/BambuHelper#getting-a-cloud-token" style="color:#58A6FF" target="_blank">Instructions</a>
-      </p>
-      <label for="cl_token">Access Token (JWT)</label>
-      <textarea id="cl_token" rows="3" style="width:100%;padding:8px;border:1px solid #30363D;border-radius:6px;background:#0D1117;color:#E6EDF3;font-size:11px;font-family:monospace;resize:vertical" placeholder="Paste your Bambu Cloud token here..."></textarea>
-      <button type="button" class="btn btn-blue" style="margin-top:8px" onclick="pasteToken()">Save Token &amp; Fetch Printers</button>
-      <div id="pasteStatus" style="margin-top:6px;font-size:13px;color:#8B949E"></div>
-      <div id="manualSerial" style="display:none;margin-top:10px">
-        <label for="cl_manual_serial">Printer Serial Number</label>
-        <input type="text" id="cl_manual_serial" placeholder="01P00A000000000" maxlength="19"
-               oninput="document.getElementById('cl_serial').value=this.value">
-        <label for="cl_manual_name">Printer Name</label>
-        <input type="text" id="cl_manual_name" placeholder="My Printer" maxlength="23"
-               oninput="document.getElementById('cl_pname').value=this.value">
-        <p style="font-size:11px;color:#8B949E;margin-top:6px">Find your serial in Bambu Handy or on the printer's label.</p>
+<!-- ===== Section 4: WiFi & System ===== -->
+<div class="section" id="s-wifi">
+  <div class="section-header" onclick="toggleSection('wifi')">
+    <h2>WiFi &amp; System</h2>
+    <span class="arrow" id="arr-wifi">&#9654;</span>
+  </div>
+  <div class="section-content" id="sec-wifi">
+    <div class="section-body">
+      <label for="ssid">WiFi SSID</label>
+      <input type="text" id="ssid" value="%SSID%" placeholder="Your WiFi name">
+      <label for="pass">WiFi Password</label>
+      <input type="password" id="pass" value="%PASS%" placeholder="WiFi password">
+
+      <label for="netmode" style="margin-top:16px">IP Assignment</label>
+      <select id="netmode" onchange="toggleStatic()">
+        <option value="dhcp" %NET_DHCP%>DHCP (automatic)</option>
+        <option value="static" %NET_STATIC%>Static IP</option>
+      </select>
+      <div id="staticFields" style="display:none">
+        <label for="net_ip">IP Address</label>
+        <input type="text" id="net_ip" value="%NET_IP%" placeholder="192.168.1.100">
+        <label for="net_gw">Gateway</label>
+        <input type="text" id="net_gw" value="%NET_GW%" placeholder="192.168.1.1">
+        <label for="net_sn">Subnet Mask</label>
+        <input type="text" id="net_sn" value="%NET_SN%" placeholder="255.255.255.0">
+        <label for="net_dns">DNS Server</label>
+        <input type="text" id="net_dns" value="%NET_DNS%" placeholder="8.8.8.8">
+      </div>
+      <div class="check-row">
+        <input type="checkbox" id="showip" value="1" %SHOWIP%>
+        <label for="showip">Show IP at startup (3s)</label>
+      </div>
+      <label for="tz">Timezone</label>
+      <select id="tz">
+        <option value="-720" %TZ_N720%>UTC-12:00</option>
+        <option value="-660" %TZ_N660%>UTC-11:00</option>
+        <option value="-600" %TZ_N600%>UTC-10:00 (Hawaii)</option>
+        <option value="-540" %TZ_N540%>UTC-9:00 (Alaska)</option>
+        <option value="-480" %TZ_N480%>UTC-8:00 (Pacific)</option>
+        <option value="-420" %TZ_N420%>UTC-7:00 (Mountain)</option>
+        <option value="-360" %TZ_N360%>UTC-6:00 (Central)</option>
+        <option value="-300" %TZ_N300%>UTC-5:00 (Eastern)</option>
+        <option value="-240" %TZ_N240%>UTC-4:00 (Atlantic)</option>
+        <option value="-210" %TZ_N210%>UTC-3:30 (Newfoundland)</option>
+        <option value="-180" %TZ_N180%>UTC-3:00 (Brazil)</option>
+        <option value="-120" %TZ_N120%>UTC-2:00</option>
+        <option value="-60" %TZ_N60%>UTC-1:00 (Azores)</option>
+        <option value="0" %TZ_0%>UTC+0:00 (London)</option>
+        <option value="60" %TZ_60%>UTC+1:00 (Berlin/Paris)</option>
+        <option value="120" %TZ_120%>UTC+2:00 (Helsinki/Cairo)</option>
+        <option value="180" %TZ_180%>UTC+3:00 (Moscow)</option>
+        <option value="210" %TZ_210%>UTC+3:30 (Tehran)</option>
+        <option value="240" %TZ_240%>UTC+4:00 (Dubai)</option>
+        <option value="270" %TZ_270%>UTC+4:30 (Kabul)</option>
+        <option value="300" %TZ_300%>UTC+5:00 (Karachi)</option>
+        <option value="330" %TZ_330%>UTC+5:30 (India)</option>
+        <option value="345" %TZ_345%>UTC+5:45 (Nepal)</option>
+        <option value="360" %TZ_360%>UTC+6:00 (Dhaka)</option>
+        <option value="420" %TZ_420%>UTC+7:00 (Bangkok)</option>
+        <option value="480" %TZ_480%>UTC+8:00 (Singapore)</option>
+        <option value="540" %TZ_540%>UTC+9:00 (Tokyo)</option>
+        <option value="570" %TZ_570%>UTC+9:30 (Adelaide)</option>
+        <option value="600" %TZ_600%>UTC+10:00 (Sydney)</option>
+        <option value="660" %TZ_660%>UTC+11:00</option>
+        <option value="720" %TZ_720%>UTC+12:00 (Auckland)</option>
+      </select>
+
+      <button type="button" class="btn btn-primary" onclick="saveWifi()">Save WiFi &amp; Restart</button>
+
+      <div style="margin-top:20px;padding-top:12px;border-top:1px solid #30363D">
+        <button type="button" class="btn btn-danger" onclick="if(confirm('Reset all settings to factory defaults?'))location='/reset'">Factory Reset</button>
       </div>
     </div>
   </div>
-  <div id="liveStats"></div>
 </div>
-<button type="submit" class="btn btn-primary">Save WiFi/Printer &amp; Restart</button>
-</form>
-
-<!-- ===== Display (live apply, no restart) ===== -->
-<div class="card">
-  <h2>Display</h2>
-  <label for="bright">Brightness: <span id="brightVal">%BRIGHT%</span></label>
-  <input type="range" name="bright" id="bright" min="10" max="255" value="%BRIGHT%"
-         oninput="document.getElementById('brightVal').textContent=this.value">
-
-  <label for="rotation">Screen Rotation</label>
-  <select name="rotation" id="rotation">
-    <option value="0" %ROT0%>0&deg; (default)</option>
-    <option value="1" %ROT1%>90&deg;</option>
-    <option value="2" %ROT2%>180&deg;</option>
-    <option value="3" %ROT3%>270&deg;</option>
-  </select>
-
-  <label for="fmins">Display off after print complete (minutes, 0 = never)</label>
-  <input type="number" name="fmins" id="fmins" min="0" max="999" value="%FMINS%">
-  <div class="check-row">
-    <input type="checkbox" name="keepon" id="keepon" value="1" %KEEPON%>
-    <label for="keepon">Keep display always on (override timeout)</label>
-  </div>
-</div>
-
-<div class="card">
-  <h2>Gauge Colors</h2>
-
-  <div class="theme-bar">
-    <button type="button" class="theme-btn" onclick="applyTheme('default')">Default</button>
-    <button type="button" class="theme-btn" onclick="applyTheme('mono_green')">Mono Green</button>
-    <button type="button" class="theme-btn" onclick="applyTheme('neon')">Neon</button>
-    <button type="button" class="theme-btn" onclick="applyTheme('warm')">Warm</button>
-    <button type="button" class="theme-btn" onclick="applyTheme('ocean')">Ocean</button>
-  </div>
-
-  <div class="global-colors">
-    <div class="color-row">
-      <label>Background</label>
-      <input type="color" name="clr_bg" id="clr_bg" value="%CLR_BG%">
-    </div>
-    <div class="color-row">
-      <label>Track</label>
-      <input type="color" name="clr_track" id="clr_track" value="%CLR_TRACK%">
-    </div>
-  </div>
-
-  <div class="gauge-section">
-    <h3>Progress</h3>
-    <div class="color-row">
-      <label>Arc</label><input type="color" name="prg_a" id="prg_a" value="%PRG_A%">
-      <label>Label</label><input type="color" name="prg_l" id="prg_l" value="%PRG_L%">
-      <label>Value</label><input type="color" name="prg_v" id="prg_v" value="%PRG_V%">
-    </div>
-  </div>
-
-  <div class="gauge-section">
-    <h3>Nozzle</h3>
-    <div class="color-row">
-      <label>Arc</label><input type="color" name="noz_a" id="noz_a" value="%NOZ_A%">
-      <label>Label</label><input type="color" name="noz_l" id="noz_l" value="%NOZ_L%">
-      <label>Value</label><input type="color" name="noz_v" id="noz_v" value="%NOZ_V%">
-    </div>
-  </div>
-
-  <div class="gauge-section">
-    <h3>Bed</h3>
-    <div class="color-row">
-      <label>Arc</label><input type="color" name="bed_a" id="bed_a" value="%BED_A%">
-      <label>Label</label><input type="color" name="bed_l" id="bed_l" value="%BED_L%">
-      <label>Value</label><input type="color" name="bed_v" id="bed_v" value="%BED_V%">
-    </div>
-  </div>
-
-  <div class="gauge-section">
-    <h3>Part Fan</h3>
-    <div class="color-row">
-      <label>Arc</label><input type="color" name="pfn_a" id="pfn_a" value="%PFN_A%">
-      <label>Label</label><input type="color" name="pfn_l" id="pfn_l" value="%PFN_L%">
-      <label>Value</label><input type="color" name="pfn_v" id="pfn_v" value="%PFN_V%">
-    </div>
-  </div>
-
-  <div class="gauge-section">
-    <h3>Aux Fan</h3>
-    <div class="color-row">
-      <label>Arc</label><input type="color" name="afn_a" id="afn_a" value="%AFN_A%">
-      <label>Label</label><input type="color" name="afn_l" id="afn_l" value="%AFN_L%">
-      <label>Value</label><input type="color" name="afn_v" id="afn_v" value="%AFN_V%">
-    </div>
-  </div>
-
-  <div class="gauge-section">
-    <h3>Chamber Fan</h3>
-    <div class="color-row">
-      <label>Arc</label><input type="color" name="cfn_a" id="cfn_a" value="%CFN_A%">
-      <label>Label</label><input type="color" name="cfn_l" id="cfn_l" value="%CFN_L%">
-      <label>Value</label><input type="color" name="cfn_v" id="cfn_v" value="%CFN_V%">
-    </div>
-  </div>
-</div>
-
-<button type="button" class="btn btn-blue" onclick="applyDisplay()">Apply Display Settings</button>
-
-<div class="card">
-  <h2>Diagnostics</h2>
-  <div class="check-row">
-    <input type="checkbox" id="dbglog" onchange="toggleDebug(this.checked)" %DBGLOG%>
-    <label for="dbglog">Verbose Serial logging (USB)</label>
-  </div>
-  <div id="diagInfo" style="margin-top:10px;font-size:12px;color:#8B949E"></div>
-</div>
-
-<button class="btn btn-danger" style="margin-top:10px"
-        onclick="if(confirm('Reset all settings?'))location='/reset'">Factory Reset</button>
 
 <script>
+// --- Collapsible sections ---
+function toggleSection(id){
+  var content=document.getElementById('sec-'+id);
+  var arrow=document.getElementById('arr-'+id);
+  var sect=document.getElementById('s-'+id);
+  var isOpen=content.classList.contains('open');
+  // Close all
+  document.querySelectorAll('.section-content').forEach(function(el){el.classList.remove('open');});
+  document.querySelectorAll('.arrow').forEach(function(el){el.classList.remove('open');});
+  document.querySelectorAll('.section').forEach(function(el){el.classList.remove('open');});
+  if(!isOpen){
+    content.classList.add('open');
+    arrow.classList.add('open');
+    sect.classList.add('open');
+    localStorage.setItem('bambu_section',id);
+  } else {
+    localStorage.removeItem('bambu_section');
+  }
+}
+(function(){
+  var saved=localStorage.getItem('bambu_section');
+  if(saved) toggleSection(saved); else toggleSection('printer');
+})();
+
+// --- Utility ---
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg||'Applied!';
+  t.style.display='block';
+  setTimeout(function(){t.style.display='none';},2000);
+}
+
 function toggleStatic(){
   var m=document.getElementById('netmode').value;
   document.getElementById('staticFields').style.display=(m==='static')?'block':'none';
@@ -365,21 +467,53 @@ function toggleConnMode(){
   document.getElementById('cloudFields').style.display=cloud?'block':'none';
   if(v==='cloud') document.getElementById('cloudDesc').innerHTML='For H2C/H2D/H2S/P2S printers. Connects via Bambu Cloud.<br>Token valid ~3 months. Your password is NOT stored.';
   else if(v==='cloud_all') document.getElementById('cloudDesc').innerHTML='Connect any printer via Bambu Cloud (no LAN mode needed).<br>Token valid ~3 months. Your password is NOT stored.';
-  // Always show manual serial fields in cloud mode so user can edit
-  if(cloud){
-    var ms=document.getElementById('manualSerial');
-    if(ms) ms.style.display='block';
-    // Pre-fill manual inputs from hidden fields (saved values)
-    var hs=document.getElementById('cl_serial');
-    var hn=document.getElementById('cl_pname');
-    var is=document.getElementById('cl_manual_serial');
-    var in2=document.getElementById('cl_manual_name');
-    if(is&&hs&&hs.value) is.value=hs.value;
-    if(in2&&hn&&hn.value) in2.value=hn.value;
-  }
 }
 toggleConnMode();
 
+// --- Save Printer (no restart) ---
+function savePrinter(){
+  var p=new URLSearchParams();
+  var mode=document.getElementById('connmode').value;
+  p.append('connmode',mode);
+  if(document.getElementById('enabled').checked) p.append('enabled','1');
+  if(mode==='cloud'||mode==='cloud_all'){
+    p.append('serial',document.getElementById('cl_serial').value);
+    p.append('pname',document.getElementById('cl_pname').value);
+  } else {
+    p.append('pname',document.getElementById('pname').value);
+    p.append('ip',document.getElementById('ip').value);
+    p.append('serial',document.getElementById('serial').value);
+    p.append('code',document.getElementById('code').value);
+  }
+  fetch('/save/printer',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.status==='ok') showToast('Printer settings saved!');
+      else showToast('Error: '+(d.message||'save failed'));
+    })
+    .catch(function(){showToast('Network error');});
+}
+
+// --- Save WiFi (restart) ---
+function saveWifi(){
+  var p=new URLSearchParams();
+  p.append('ssid',document.getElementById('ssid').value);
+  p.append('pass',document.getElementById('pass').value);
+  p.append('netmode',document.getElementById('netmode').value);
+  p.append('net_ip',document.getElementById('net_ip').value);
+  p.append('net_gw',document.getElementById('net_gw').value);
+  p.append('net_sn',document.getElementById('net_sn').value);
+  p.append('net_dns',document.getElementById('net_dns').value);
+  if(document.getElementById('showip').checked) p.append('showip','1');
+  p.append('tz',document.getElementById('tz').value);
+  fetch('/save/wifi',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()})
+    .then(function(){
+      document.body.innerHTML='<div style="text-align:center;padding-top:80px"><h2 style="color:#3FB950">WiFi Saved!</h2><p style="color:#8B949E;margin-top:10px">Restarting...</p></div>';
+    })
+    .catch(function(){showToast('Error');});
+}
+
+// --- Cloud login flow ---
 function cloudLogin(){
   var email=document.getElementById('cl_email').value;
   var pass=document.getElementById('cl_pass').value;
@@ -421,17 +555,7 @@ function cloudVerify(){
         document.getElementById('cloudLoginSection').style.display='none';
         document.getElementById('cloudLogoutBtn').style.display='block';
         if(d.printers&&d.printers.length>0){
-          var sel=document.getElementById('cl_device');
-          sel.innerHTML='';
-          for(var i=0;i<d.printers.length;i++){
-            var o=document.createElement('option');
-            o.value=d.printers[i].serial;
-            o.setAttribute('data-name',d.printers[i].name);
-            o.textContent=d.printers[i].name+' ('+d.printers[i].model+')';
-            sel.appendChild(o);
-          }
-          document.getElementById('cloudDevices').style.display='block';
-          selectCloudDevice();
+          populateDeviceList(d.printers);
         }
       } else {
         document.getElementById('cloudStatus').innerHTML='<span style="color:#F85149">'+(d.message||'Verification failed')+'</span>';
@@ -440,29 +564,37 @@ function cloudVerify(){
     .catch(function(){document.getElementById('cloudStatus').innerHTML='<span style="color:#F85149">Network error</span>';});
 }
 
+function populateDeviceList(printers){
+  var sel=document.getElementById('cl_device');
+  sel.innerHTML='';
+  for(var i=0;i<printers.length;i++){
+    var o=document.createElement('option');
+    o.value=printers[i].serial;
+    o.setAttribute('data-name',printers[i].name);
+    o.textContent=printers[i].name+' ('+printers[i].model+')';
+    sel.appendChild(o);
+  }
+  document.getElementById('cloudDevices').style.display='block';
+  selectCloudDevice();
+}
+
 function selectCloudDevice(){
   var sel=document.getElementById('cl_device');
   if(sel.selectedIndex<0)return;
   var opt=sel.options[sel.selectedIndex];
-  document.getElementById('cl_serial').value=sel.value;
-  document.getElementById('cl_pname').value=opt.getAttribute('data-name')||opt.textContent;
+  var serial=sel.value;
+  var name=opt.getAttribute('data-name')||opt.textContent;
+  document.getElementById('cl_serial').value=serial;
+  document.getElementById('cl_pname').value=name;
+  document.getElementById('cl_manual_serial').value=serial;
+  document.getElementById('cl_manual_name').value=name;
+  // Auto-save selection
+  savePrinter();
 }
 
 function cloudFetchDevices(){
   fetch('/cloud/devices').then(function(r){return r.json();}).then(function(d){
-    if(d.printers&&d.printers.length>0){
-      var sel=document.getElementById('cl_device');
-      sel.innerHTML='';
-      for(var i=0;i<d.printers.length;i++){
-        var o=document.createElement('option');
-        o.value=d.printers[i].serial;
-        o.setAttribute('data-name',d.printers[i].name);
-        o.textContent=d.printers[i].name+' ('+d.printers[i].model+')';
-        sel.appendChild(o);
-      }
-      document.getElementById('cloudDevices').style.display='block';
-      selectCloudDevice();
-    }
+    if(d.printers&&d.printers.length>0) populateDeviceList(d.printers);
   }).catch(function(){});
 }
 
@@ -481,6 +613,9 @@ function pasteToken(){
   document.getElementById('pasteStatus').innerHTML='<span style="color:#58A6FF">Saving token...</span>';
   var p=new URLSearchParams();
   p.append('token',token);
+  // Also send serial+name so they get saved with the token
+  p.append('serial',document.getElementById('cl_manual_serial').value);
+  p.append('pname',document.getElementById('cl_manual_name').value);
   fetch('/cloud/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -490,20 +625,9 @@ function pasteToken(){
         document.getElementById('cloudLoginSection').style.display='none';
         document.getElementById('cloudLogoutBtn').style.display='block';
         if(d.printers&&d.printers.length>0){
-          var sel=document.getElementById('cl_device');
-          sel.innerHTML='';
-          for(var i=0;i<d.printers.length;i++){
-            var o=document.createElement('option');
-            o.value=d.printers[i].serial;
-            o.setAttribute('data-name',d.printers[i].name);
-            o.textContent=d.printers[i].name+' ('+d.printers[i].model+')';
-            sel.appendChild(o);
-          }
-          document.getElementById('cloudDevices').style.display='block';
-          selectCloudDevice();
+          populateDeviceList(d.printers);
         } else {
-          document.getElementById('pasteStatus').innerHTML+='<br><span style="color:#8B949E">Could not fetch printers (Cloudflare may block device list too). Enter serial manually below.</span>';
-          document.getElementById('manualSerial').style.display='block';
+          document.getElementById('pasteStatus').innerHTML+='<br><span style="color:#8B949E">Could not fetch printers (Cloudflare may block). Enter serial manually above.</span>';
         }
       } else {
         document.getElementById('pasteStatus').innerHTML='<span style="color:#F85149">'+(d.message||'Invalid token')+'</span>';
@@ -512,42 +636,28 @@ function pasteToken(){
     .catch(function(){document.getElementById('pasteStatus').innerHTML='<span style="color:#F85149">Network error</span>';});
 }
 
+// --- Display ---
 var themes={
   default:{bg:'#081018',track:'#182028',
-    prg:{a:'#00FF00',l:'#00FF00',v:'#FFFFFF'},
-    noz:{a:'#FFA500',l:'#FFA500',v:'#FFFFFF'},
-    bed:{a:'#00FFFF',l:'#00FFFF',v:'#FFFFFF'},
-    pfn:{a:'#00FFFF',l:'#00FFFF',v:'#FFFFFF'},
-    afn:{a:'#FFA500',l:'#FFA500',v:'#FFFFFF'},
-    cfn:{a:'#00FF00',l:'#00FF00',v:'#FFFFFF'}},
+    prg:{a:'#00FF00',l:'#00FF00',v:'#FFFFFF'},noz:{a:'#FFA500',l:'#FFA500',v:'#FFFFFF'},
+    bed:{a:'#00FFFF',l:'#00FFFF',v:'#FFFFFF'},pfn:{a:'#00FFFF',l:'#00FFFF',v:'#FFFFFF'},
+    afn:{a:'#FFA500',l:'#FFA500',v:'#FFFFFF'},cfn:{a:'#00FF00',l:'#00FF00',v:'#FFFFFF'}},
   mono_green:{bg:'#000800',track:'#0A1A0A',
-    prg:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},
-    noz:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},
-    bed:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},
-    pfn:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},
-    afn:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},
-    cfn:{a:'#00FF41',l:'#00CC33',v:'#00FF41'}},
+    prg:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},noz:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},
+    bed:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},pfn:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},
+    afn:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},cfn:{a:'#00FF41',l:'#00CC33',v:'#00FF41'}},
   neon:{bg:'#0A0014',track:'#1A0A2E',
-    prg:{a:'#FF00FF',l:'#FF00FF',v:'#FFFFFF'},
-    noz:{a:'#FF4400',l:'#FF6600',v:'#FFFFFF'},
-    bed:{a:'#00FFFF',l:'#00FFFF',v:'#FFFFFF'},
-    pfn:{a:'#00FF88',l:'#00FF88',v:'#FFFFFF'},
-    afn:{a:'#FFFF00',l:'#FFFF00',v:'#FFFFFF'},
-    cfn:{a:'#FF00FF',l:'#FF00FF',v:'#FFFFFF'}},
+    prg:{a:'#FF00FF',l:'#FF00FF',v:'#FFFFFF'},noz:{a:'#FF4400',l:'#FF6600',v:'#FFFFFF'},
+    bed:{a:'#00FFFF',l:'#00FFFF',v:'#FFFFFF'},pfn:{a:'#00FF88',l:'#00FF88',v:'#FFFFFF'},
+    afn:{a:'#FFFF00',l:'#FFFF00',v:'#FFFFFF'},cfn:{a:'#FF00FF',l:'#FF00FF',v:'#FFFFFF'}},
   warm:{bg:'#140A00',track:'#2E1A08',
-    prg:{a:'#FFB347',l:'#FFB347',v:'#FFEEDD'},
-    noz:{a:'#FF6347',l:'#FF6347',v:'#FFEEDD'},
-    bed:{a:'#FFA500',l:'#FFA500',v:'#FFEEDD'},
-    pfn:{a:'#FFD700',l:'#FFD700',v:'#FFEEDD'},
-    afn:{a:'#FF8C00',l:'#FF8C00',v:'#FFEEDD'},
-    cfn:{a:'#FFB347',l:'#FFB347',v:'#FFEEDD'}},
+    prg:{a:'#FFB347',l:'#FFB347',v:'#FFEEDD'},noz:{a:'#FF6347',l:'#FF6347',v:'#FFEEDD'},
+    bed:{a:'#FFA500',l:'#FFA500',v:'#FFEEDD'},pfn:{a:'#FFD700',l:'#FFD700',v:'#FFEEDD'},
+    afn:{a:'#FF8C00',l:'#FF8C00',v:'#FFEEDD'},cfn:{a:'#FFB347',l:'#FFB347',v:'#FFEEDD'}},
   ocean:{bg:'#000A14',track:'#0A1A2E',
-    prg:{a:'#00BFFF',l:'#00BFFF',v:'#E0F0FF'},
-    noz:{a:'#FF7F50',l:'#FF7F50',v:'#E0F0FF'},
-    bed:{a:'#4169E1',l:'#4169E1',v:'#E0F0FF'},
-    pfn:{a:'#00CED1',l:'#00CED1',v:'#E0F0FF'},
-    afn:{a:'#48D1CC',l:'#48D1CC',v:'#E0F0FF'},
-    cfn:{a:'#20B2AA',l:'#20B2AA',v:'#E0F0FF'}}
+    prg:{a:'#00BFFF',l:'#00BFFF',v:'#E0F0FF'},noz:{a:'#FF7F50',l:'#FF7F50',v:'#E0F0FF'},
+    bed:{a:'#4169E1',l:'#4169E1',v:'#E0F0FF'},pfn:{a:'#00CED1',l:'#00CED1',v:'#E0F0FF'},
+    afn:{a:'#48D1CC',l:'#48D1CC',v:'#E0F0FF'},cfn:{a:'#20B2AA',l:'#20B2AA',v:'#E0F0FF'}}
 };
 
 function applyTheme(name){
@@ -563,6 +673,26 @@ function applyTheme(name){
   }
 }
 
+function applyDisplay(){
+  var p=new URLSearchParams();
+  p.append('bright',document.getElementById('bright').value);
+  p.append('rotation',document.getElementById('rotation').value);
+  p.append('fmins',document.getElementById('fmins').value);
+  if(document.getElementById('keepon').checked) p.append('keepon','1');
+  p.append('clr_bg',document.getElementById('clr_bg').value);
+  p.append('clr_track',document.getElementById('clr_track').value);
+  var g=['prg','noz','bed','pfn','afn','cfn'];
+  for(var i=0;i<g.length;i++){
+    p.append(g[i]+'_a',document.getElementById(g[i]+'_a').value);
+    p.append(g[i]+'_l',document.getElementById(g[i]+'_l').value);
+    p.append(g[i]+'_v',document.getElementById(g[i]+'_v').value);
+  }
+  fetch('/apply',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()}).then(function(r){
+    if(r.ok) showToast('Applied!'); else showToast('Error');
+  }).catch(function(){showToast('Error');});
+}
+
+// --- Diagnostics ---
 function toggleDebug(on){
   fetch('/debug/toggle',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'on='+(on?'1':'0')}).then(r=>{
     if(r.ok) showToast(on?'Debug ON':'Debug OFF');
@@ -584,30 +714,7 @@ function refreshDiag(){
 refreshDiag();
 setInterval(refreshDiag,5000);
 
-function showToast(msg){
-  var t=document.getElementById('toast');
-  t.textContent=msg||'Applied!';
-  t.style.display='block';
-  setTimeout(function(){t.style.display='none';},2000);
-}
-
-function applyDisplay(){
-  var p=new URLSearchParams();
-  p.append('bright',document.getElementById('bright').value);
-  p.append('rotation',document.getElementById('rotation').value);
-  p.append('clr_bg',document.getElementById('clr_bg').value);
-  p.append('clr_track',document.getElementById('clr_track').value);
-  var g=['prg','noz','bed','pfn','afn','cfn'];
-  for(var i=0;i<g.length;i++){
-    p.append(g[i]+'_a',document.getElementById(g[i]+'_a').value);
-    p.append(g[i]+'_l',document.getElementById(g[i]+'_l').value);
-    p.append(g[i]+'_v',document.getElementById(g[i]+'_v').value);
-  }
-  fetch('/apply',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()}).then(function(r){
-    if(r.ok) showToast('Applied!'); else showToast('Error');
-  }).catch(function(){showToast('Error');});
-}
-
+// --- Live stats ---
 setInterval(function(){
   fetch('/status').then(r=>r.json()).then(d=>{
     var h='';
@@ -694,7 +801,7 @@ static String processTemplate(const String& html) {
   page.replace("%NET_DNS%", netSettings.dns);
   page.replace("%SHOWIP%", netSettings.showIPAtStartup ? "checked" : "");
 
-  // Timezone dropdown — mark the selected option
+  // Timezone dropdown
   {
     const int16_t tzVals[] = {-720,-660,-600,-540,-480,-420,-360,-300,-240,-210,-180,-120,-60,
                               0,60,120,180,210,240,270,300,330,345,360,420,480,540,570,600,660,720};
@@ -763,7 +870,7 @@ static void readGaugeColorsFromForm(const char* prefix, GaugeColors& gc) {
 }
 
 // ---------------------------------------------------------------------------
-//  Read display settings from form args (shared by /save and /apply)
+//  Read display settings from form args
 // ---------------------------------------------------------------------------
 static void readDisplayFromForm() {
   if (server.hasArg("bright")) {
@@ -794,23 +901,19 @@ static void readDisplayFromForm() {
 //  Route handlers
 // ---------------------------------------------------------------------------
 static void handleRoot() {
-  String html = FPSTR(PAGE_HTML);
-  server.send(200, "text/html", processTemplate(html));
+  if (isAPMode()) {
+    server.send(200, "text/html", FPSTR(PAGE_AP_HTML));
+  } else {
+    String html = FPSTR(PAGE_HTML);
+    server.send(200, "text/html", processTemplate(html));
+  }
 }
 
-// Save WiFi + Printer settings (requires restart)
-static void handleSave() {
-  if (server.hasArg("ssid")) {
-    strlcpy(wifiSSID, server.arg("ssid").c_str(), sizeof(wifiSSID));
-  }
-  if (server.hasArg("pass")) {
-    strlcpy(wifiPass, server.arg("pass").c_str(), sizeof(wifiPass));
-  }
-
+// Save printer settings only (no restart — reinit MQTT)
+static void handleSavePrinter() {
   PrinterConfig& cfg = printers[0].config;
   cfg.enabled = server.hasArg("enabled");
 
-  // Connection mode
   if (server.hasArg("connmode")) {
     String cm = server.arg("connmode");
     if (cm == "cloud") cfg.mode = CONN_CLOUD;
@@ -818,7 +921,37 @@ static void handleSave() {
     else cfg.mode = CONN_LOCAL;
   }
 
-  // Network settings
+  if (isCloudMode(cfg.mode)) {
+    if (server.hasArg("serial")) strlcpy(cfg.serial, server.arg("serial").c_str(), sizeof(cfg.serial));
+    if (server.hasArg("pname"))  strlcpy(cfg.name, server.arg("pname").c_str(), sizeof(cfg.name));
+    // Extract userId from stored token
+    char tokenBuf[1200];
+    if (loadCloudToken(tokenBuf, sizeof(tokenBuf))) {
+      if (!cloudExtractUserId(tokenBuf, cfg.cloudUserId, sizeof(cfg.cloudUserId))) {
+        cloudFetchUserId(tokenBuf, cfg.cloudUserId, sizeof(cfg.cloudUserId));
+      }
+    }
+  } else {
+    if (server.hasArg("pname"))  strlcpy(cfg.name, server.arg("pname").c_str(), sizeof(cfg.name));
+    if (server.hasArg("ip"))     strlcpy(cfg.ip, server.arg("ip").c_str(), sizeof(cfg.ip));
+    if (server.hasArg("serial")) strlcpy(cfg.serial, server.arg("serial").c_str(), sizeof(cfg.serial));
+    if (server.hasArg("code"))   strlcpy(cfg.accessCode, server.arg("code").c_str(), sizeof(cfg.accessCode));
+  }
+
+  savePrinterConfig(0);
+
+  // Reinit MQTT with new config
+  disconnectBambuMqtt();
+  initBambuMqtt();
+
+  server.send(200, "application/json", "{\"status\":\"ok\"}");
+}
+
+// Save WiFi + network settings (requires restart)
+static void handleSaveWifi() {
+  if (server.hasArg("ssid")) strlcpy(wifiSSID, server.arg("ssid").c_str(), sizeof(wifiSSID));
+  if (server.hasArg("pass")) strlcpy(wifiPass, server.arg("pass").c_str(), sizeof(wifiPass));
+
   netSettings.useDHCP = (!server.hasArg("netmode") || server.arg("netmode") == "dhcp");
   if (server.hasArg("net_ip"))  strlcpy(netSettings.staticIP, server.arg("net_ip").c_str(), sizeof(netSettings.staticIP));
   if (server.hasArg("net_gw"))  strlcpy(netSettings.gateway, server.arg("net_gw").c_str(), sizeof(netSettings.gateway));
@@ -827,35 +960,9 @@ static void handleSave() {
   netSettings.showIPAtStartup = server.hasArg("showip");
   if (server.hasArg("tz")) netSettings.gmtOffsetMin = server.arg("tz").toInt();
 
-  if (isCloudMode(cfg.mode)) {
-    // Cloud mode: serial and name come from hidden fields
-    Serial.printf("SAVE: cl_serial='%s' cl_pname='%s' has_cl_serial=%d has_cl_pname=%d\n",
-                  server.arg("cl_serial").c_str(), server.arg("cl_pname").c_str(),
-                  server.hasArg("cl_serial"), server.hasArg("cl_pname"));
-    if (server.hasArg("cl_serial")) strlcpy(cfg.serial, server.arg("cl_serial").c_str(), sizeof(cfg.serial));
-    if (server.hasArg("cl_pname"))  strlcpy(cfg.name, server.arg("cl_pname").c_str(), sizeof(cfg.name));
-    // Extract userId from stored token (JWT decode, then profile API fallback)
-    char tokenBuf[1200];
-    if (loadCloudToken(tokenBuf, sizeof(tokenBuf))) {
-      if (!cloudExtractUserId(tokenBuf, cfg.cloudUserId, sizeof(cfg.cloudUserId))) {
-        cloudFetchUserId(tokenBuf, cfg.cloudUserId, sizeof(cfg.cloudUserId));
-      }
-    }
-  } else {
-    // Local mode: standard fields
-    if (server.hasArg("pname")) strlcpy(cfg.name, server.arg("pname").c_str(), sizeof(cfg.name));
-    if (server.hasArg("ip"))    strlcpy(cfg.ip, server.arg("ip").c_str(), sizeof(cfg.ip));
-    if (server.hasArg("serial"))strlcpy(cfg.serial, server.arg("serial").c_str(), sizeof(cfg.serial));
-    if (server.hasArg("code"))  strlcpy(cfg.accessCode, server.arg("code").c_str(), sizeof(cfg.accessCode));
-  }
-
   saveSettings();
 
-  server.send(200, "text/html",
-    "<html><body style='background:#0D1117;color:#E6EDF3;text-align:center;padding-top:80px;font-family:sans-serif'>"
-    "<h2 style='color:#3FB950'>Settings Saved!</h2>"
-    "<p>Restarting...</p></body></html>");
-
+  server.send(200, "application/json", "{\"status\":\"ok\"}");
   delay(1000);
   ESP.restart();
 }
@@ -958,7 +1065,6 @@ static void handleCloudVerify() {
   JsonDocument doc;
   if (r == CLOUD_OK) {
     doc["status"] = "ok";
-    // Fetch and return device list
     char tokenBuf[1200];
     if (loadCloudToken(tokenBuf, sizeof(tokenBuf))) {
       CloudPrinter devs[8];
@@ -1015,14 +1121,24 @@ static void handleCloudToken() {
   // Try to extract userId — JWT decode first, then profile API fallback
   char uid[32] = {0};
   if (!cloudExtractUserId(token.c_str(), uid, sizeof(uid))) {
-    // Not a JWT — try fetching userId from profile API
     if (!cloudFetchUserId(token.c_str(), uid, sizeof(uid))) {
-      server.send(200, "application/json", "{\"status\":\"error\",\"message\":\"Could not extract userId from token. Try entering it manually.\"}");
+      server.send(200, "application/json", "{\"status\":\"error\",\"message\":\"Could not extract userId from token.\"}");
       return;
     }
   }
 
   Serial.printf("CLOUD: Token pasted, userId=%s\n", uid);
+
+  // Save serial+name+userId to printer config if provided
+  PrinterConfig& cfg = printers[0].config;
+  strlcpy(cfg.cloudUserId, uid, sizeof(cfg.cloudUserId));
+  if (server.hasArg("serial") && server.arg("serial").length() > 0) {
+    strlcpy(cfg.serial, server.arg("serial").c_str(), sizeof(cfg.serial));
+  }
+  if (server.hasArg("pname") && server.arg("pname").length() > 0) {
+    strlcpy(cfg.name, server.arg("pname").c_str(), sizeof(cfg.name));
+  }
+  savePrinterConfig(0);
 
   JsonDocument doc;
   doc["status"] = "ok";
@@ -1069,7 +1185,8 @@ static void handleNotFound() {
 // ---------------------------------------------------------------------------
 void initWebServer() {
   server.on("/", HTTP_GET, handleRoot);
-  server.on("/save", HTTP_POST, handleSave);
+  server.on("/save/wifi", HTTP_POST, handleSaveWifi);
+  server.on("/save/printer", HTTP_POST, handleSavePrinter);
   server.on("/apply", HTTP_POST, handleApply);
   server.on("/status", HTTP_GET, handleStatus);
   server.on("/reset", HTTP_GET, handleReset);

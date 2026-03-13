@@ -430,8 +430,9 @@ void handleBambuMqtt() {
     }
   }
 
-  // Stale timeout
-  if (s.lastUpdate > 0 && millis() - s.lastUpdate > BAMBU_STALE_TIMEOUT) {
+  // Stale timeout — cloud sends less frequently, use longer timeout
+  unsigned long staleMs = isCloudMode(cfg.mode) ? BAMBU_STALE_TIMEOUT * 5 : BAMBU_STALE_TIMEOUT;
+  if (s.lastUpdate > 0 && millis() - s.lastUpdate > staleMs) {
     if (s.printing) {
       s.printing = false;
     }
