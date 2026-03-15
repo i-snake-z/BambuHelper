@@ -61,7 +61,7 @@ void initDisplay() {
   tft.setTextColor(CLR_TEXT_DIM, CLR_BG);
   tft.drawString("Printer Monitor", SCREEN_W / 2, SCREEN_H / 2 + 10);
   tft.setTextFont(1);
-  tft.drawString("v2.0", SCREEN_W / 2, SCREEN_H / 2 + 30);
+  tft.drawString(FW_VERSION, SCREEN_W / 2, SCREEN_H / 2 + 30);
 }
 
 void applyDisplaySettings() {
