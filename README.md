@@ -20,7 +20,7 @@ When using Bambu Cloud, BambuHelper connects through Bambu Lab's cloud MQTT serv
 - **No credentials are stored** - BambuHelper never asks for your email or password. You extract an access token from your browser and paste it into the web interface.
 - **Only the access token is stored** in the ESP32's flash memory. This token expires after ~3 months, at which point you simply paste a new one.
 - **Read-only access** - BambuHelper only reads printer status. It never sends commands or modifies printer settings.
-- **Same approach as other community projects** - this is the same authentication method used by the [Home Assistant Bambu Lab integration](https://github.com/greghesp/ha-bambulab) (15,000+ users), [OctoPrint-Bambu](https://github.com/jneilliii/OctoPrint-Bambu), and other trusted third-party tools.
+- **Same approach as other community projects** - this is the same authentication method used by the [Home Assistant Bambu Lab integration](https://github.com/greghesp/ha-bambulab) (15,000+ users), [OctoPrint-Bambu](https://github.com/jneilliii/OctoPrint-BambuPrinter), and other trusted third-party tools.
 
 ## Screenshots
 
@@ -41,7 +41,7 @@ When using Bambu Cloud, BambuHelper connects through Bambu Lab's cloud MQTT serv
 - **Auto AP mode** - creates WiFi hotspot on first boot or when WiFi is lost
 - **Smart redraw** - only redraws changed UI elements for smooth performance
 - **Customizable gauge colors** - per-gauge arc/label/value colors with preset themes
-- **Multi-printer support** - monitor up to 2 printers simultaneously with auto-rotating display
+- **BETA: [Multi-printer support](firmware/BambuHelper-WebFlasher-v2.1-BETA.bin)** - monitor up to 2 printers simultaneously with auto-rotating display
 - **Smart rotation** - automatically shows the printing printer; cycles between both when both are printing
 - **Physical button** - optional push button or TTP223 touch sensor to cycle printers and wake display
 - **Exponential backoff** - reconnect attempts to offline printers gradually slow down to conserve resources
