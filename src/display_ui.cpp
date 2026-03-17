@@ -90,7 +90,7 @@ ScreenState getScreenState() {
 // ---------------------------------------------------------------------------
 static const char* nozzleLabel(const BambuState& s) {
   if (!s.dualNozzle) return "Nozzle";
-  return s.activeNozzle == 0 ? "Nozzle L" : "Nozzle R";
+  return s.activeNozzle == 0 ? "Nozzle R" : "Nozzle L";
 }
 
 // ---------------------------------------------------------------------------
