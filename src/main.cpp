@@ -88,7 +88,7 @@ static void handleRotation() {
 // ---------------------------------------------------------------------------
 void setup() {
   Serial.begin(115200);
-  Serial.println("\n=== BambuHelper Starting ===");
+  Serial.printf("\n=== BambuHelper %s Starting ===\n", FW_VERSION);
 
   loadSettings();
   initDisplay();
