@@ -9,6 +9,27 @@ enum CloudRegion : uint8_t { REGION_US = 0, REGION_EU = 1, REGION_CN = 2 };
 
 inline bool isCloudMode(ConnMode m) { return m == CONN_CLOUD || m == CONN_CLOUD_ALL; }
 
+// ── AMS (Automatic Material System) ──────────────────────────────────────────
+#define AMS_MAX_UNITS      4
+#define AMS_TRAYS_PER_UNIT 4
+#define AMS_MAX_TRAYS      (AMS_MAX_UNITS * AMS_TRAYS_PER_UNIT)
+
+struct AmsTray {
+  bool     present;        // tray physically present
+  uint16_t colorRgb565;    // pre-converted for TFT
+  char     type[16];       // "PLA Matte" etc.
+};
+
+struct AmsState {
+  bool     present;               // any AMS data received
+  uint8_t  unitCount;             // detected AMS units (0-4)
+  uint8_t  activeTray;            // tray_now (0-15), 255 = none
+  AmsTray  trays[AMS_MAX_TRAYS];  // indexed by unit*4 + trayId
+  bool     vtPresent;             // external spool configured
+  uint16_t vtColorRgb565;
+  char     vtType[16];
+};
+
 struct BambuState {
   bool connected;
   bool printing;
@@ -32,6 +53,7 @@ struct BambuState {
   bool dualNozzle;            // H2D/H2C dual extruder detected
   uint8_t activeNozzle;       // 0=left, 1=right (only when dualNozzle)
   unsigned long lastUpdate;   // millis() of last MQTT message
+  AmsState ams;               // AMS tray data
 };
 
 struct PrinterConfig {

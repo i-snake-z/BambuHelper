@@ -386,15 +386,26 @@ static void drawIdle() {
                   &dispSettings.bed);
   }
 
-  // WiFi signal at bottom
-  if (wifiChanged) {
-    tft.fillRect(0, SCREEN_H - 14, SCREEN_W, 14, CLR_BG);
-    tft.setTextFont(1);
-    tft.setTextColor(CLR_TEXT_DIM, CLR_BG);
+  // Bottom: filament indicator or WiFi signal
+  bool bottomChanged = wifiChanged || (s.ams.activeTray != prevState.ams.activeTray);
+  if (bottomChanged) {
+    tft.fillRect(0, SCREEN_H - 18, SCREEN_W, 18, CLR_BG);
+    tft.setTextFont(2);
     tft.setTextDatum(BC_DATUM);
-    char wifiBuf[24];
-    snprintf(wifiBuf, sizeof(wifiBuf), "WiFi: %d dBm", s.wifiSignal);
-    tft.drawString(wifiBuf, SCREEN_W / 2, SCREEN_H - 5);
+
+    if (s.ams.present && s.ams.activeTray < AMS_MAX_TRAYS && s.ams.trays[s.ams.activeTray].present) {
+      AmsTray& t = s.ams.trays[s.ams.activeTray];
+      int cx = SCREEN_W / 2 - tft.textWidth(t.type) / 2 - 8;
+      tft.drawCircle(cx, SCREEN_H - 8, 5, CLR_TEXT_DARK);
+      tft.fillCircle(cx, SCREEN_H - 8, 4, t.colorRgb565);
+      tft.setTextColor(CLR_TEXT_DIM, CLR_BG);
+      tft.drawString(t.type, SCREEN_W / 2 + 4, SCREEN_H - 2);
+    } else {
+      tft.setTextColor(CLR_TEXT_DIM, CLR_BG);
+      char wifiBuf[24];
+      snprintf(wifiBuf, sizeof(wifiBuf), "WiFi: %d dBm", s.wifiSignal);
+      tft.drawString(wifiBuf, SCREEN_W / 2, SCREEN_H - 2);
+    }
   }
 }
 
@@ -578,34 +589,55 @@ static void drawPrinting() {
     }
   }
 
-  // === Bottom status bar — WiFi | Layer | Speed (y=218-236) ===
+  // === Bottom status bar — Filament/WiFi | Layer | Speed (y=222-240) ===
   bool bottomChanged = forceRedraw ||
                        (s.wifiSignal != prevState.wifiSignal) ||
                        (s.speedLevel != prevState.speedLevel) ||
                        (s.layerNum != prevState.layerNum) ||
-                       (s.totalLayers != prevState.totalLayers);
+                       (s.totalLayers != prevState.totalLayers) ||
+                       (s.ams.activeTray != prevState.ams.activeTray);
   if (bottomChanged) {
-    tft.fillRect(0, 218, SCREEN_W, 22, CLR_BG);
-    tft.setTextFont(1);
+    tft.fillRect(0, 222, SCREEN_W, 18, CLR_BG);
+    tft.setTextFont(2);
 
-    // WiFi signal (left)
-    tft.setTextDatum(ML_DATUM);
-    tft.setTextColor(CLR_TEXT_DIM, CLR_BG);
-    char wifiBuf[20];
-    snprintf(wifiBuf, sizeof(wifiBuf), "WiFi %ddBm", s.wifiSignal);
-    tft.drawString(wifiBuf, 4, 230);
+    // Left: filament indicator (if AMS active) or WiFi signal
+    if (s.ams.present && s.ams.activeTray < AMS_MAX_TRAYS) {
+      AmsTray& t = s.ams.trays[s.ams.activeTray];
+      if (t.present) {
+        tft.drawCircle(10, 232, 5, CLR_TEXT_DARK);
+        tft.fillCircle(10, 232, 4, t.colorRgb565);
+        tft.setTextDatum(ML_DATUM);
+        tft.setTextColor(CLR_TEXT_DIM, CLR_BG);
+        tft.drawString(t.type, 19, 232);
+      } else {
+        goto wifi_fallback;
+      }
+    } else if (s.ams.vtPresent && s.ams.activeTray == 254) {
+      tft.drawCircle(10, 232, 5, CLR_TEXT_DARK);
+      tft.fillCircle(10, 232, 4, s.ams.vtColorRgb565);
+      tft.setTextDatum(ML_DATUM);
+      tft.setTextColor(CLR_TEXT_DIM, CLR_BG);
+      tft.drawString(s.ams.vtType, 19, 232);
+    } else {
+      wifi_fallback:
+      tft.setTextDatum(ML_DATUM);
+      tft.setTextColor(CLR_TEXT_DIM, CLR_BG);
+      char wifiBuf[16];
+      snprintf(wifiBuf, sizeof(wifiBuf), "%ddBm", s.wifiSignal);
+      tft.drawString(wifiBuf, 4, 232);
+    }
 
     // Layer count (center)
     tft.setTextDatum(MC_DATUM);
     tft.setTextColor(CLR_TEXT_DIM, CLR_BG);
     char layerBuf[20];
     snprintf(layerBuf, sizeof(layerBuf), "L%d/%d", s.layerNum, s.totalLayers);
-    tft.drawString(layerBuf, SCREEN_W / 2, 230);
+    tft.drawString(layerBuf, SCREEN_W / 2, 232);
 
     // Speed mode (right)
     tft.setTextDatum(MR_DATUM);
     tft.setTextColor(speedLevelColor(s.speedLevel), CLR_BG);
-    tft.drawString(speedLevelName(s.speedLevel), SCREEN_W - 4, 230);
+    tft.drawString(speedLevelName(s.speedLevel), SCREEN_W - 4, 232);
   }
 }
 

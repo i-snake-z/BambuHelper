@@ -33,6 +33,23 @@ uint16_t htmlToRgb565(const char* hex) {
   return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
 }
 
+uint16_t bambuColorToRgb565(const char* rrggbbaa) {
+  if (!rrggbbaa || strlen(rrggbbaa) < 6) return 0;
+  uint32_t rgba = strtoul(rrggbbaa, nullptr, 16);
+  // RRGGBBAA: shift depends on length (6 = RRGGBB, 8 = RRGGBBAA)
+  uint8_t r, g, b;
+  if (strlen(rrggbbaa) >= 8) {
+    r = (rgba >> 24) & 0xFF;
+    g = (rgba >> 16) & 0xFF;
+    b = (rgba >> 8) & 0xFF;
+  } else {
+    r = (rgba >> 16) & 0xFF;
+    g = (rgba >> 8) & 0xFF;
+    b = rgba & 0xFF;
+  }
+  return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
+}
+
 void rgb565ToHtml(uint16_t c, char* buf) {
   uint8_t r = ((c >> 11) & 0x1F) * 255 / 31;
   uint8_t g = ((c >> 5) & 0x3F) * 255 / 63;

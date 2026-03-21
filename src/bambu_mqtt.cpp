@@ -226,6 +226,108 @@ static void parseMqttPayload(byte* payload, unsigned int length,
     }
   }
 
+  // AMS data: parse from raw payload (deeply nested, same approach as extruder)
+  // Search for "ams":{ (outer object, not "ams":[ which is the inner array)
+  {
+    const char* search = (const char*)payload;
+    size_t rem = length;
+    const char* amsObj = nullptr;
+
+    while (rem > 6) {
+      const char* f = (const char*)memmem(search, rem, "\"ams\":", 6);
+      if (!f) break;
+      const char* v = f + 6;
+      while (*v == ' ' || *v == '\n' || *v == '\r' || *v == '\t') v++;
+      if (*v == '{') { amsObj = v; break; }
+      search = f + 6;
+      rem = length - (search - (const char*)payload);
+    }
+
+    if (amsObj) {
+      // Find matching closing brace
+      int depth = 0;
+      const char* end = amsObj;
+      const char* limit = (const char*)payload + length;
+      while (end < limit) {
+        if (*end == '{') depth++;
+        else if (*end == '}') { depth--; if (depth == 0) { end++; break; } }
+        end++;
+      }
+      if (depth == 0) {
+        JsonDocument amsDoc;
+        if (!deserializeJson(amsDoc, amsObj, (size_t)(end - amsObj))) {
+          s.ams.present = true;
+          s.ams.unitCount = 0;
+
+          if (amsDoc["tray_now"].is<const char*>())
+            s.ams.activeTray = atoi(amsDoc["tray_now"].as<const char*>());
+
+          JsonArray units = amsDoc["ams"];
+          for (JsonObject unit : units) {
+            if (!unit["id"].is<const char*>()) continue;
+            uint8_t uid = atoi(unit["id"].as<const char*>());
+            if (uid >= AMS_MAX_UNITS) continue;
+            s.ams.unitCount++;
+
+            JsonArray trays = unit["tray"];
+            for (JsonObject tray : trays) {
+              if (!tray["id"].is<const char*>()) continue;
+              uint8_t tid = atoi(tray["id"].as<const char*>());
+              if (tid >= AMS_TRAYS_PER_UNIT) continue;
+
+              uint8_t idx = uid * AMS_TRAYS_PER_UNIT + tid;
+              AmsTray& t = s.ams.trays[idx];
+
+              if (tray["tray_type"].is<const char*>()) {
+                t.present = true;
+                if (tray["tray_color"].is<const char*>())
+                  t.colorRgb565 = bambuColorToRgb565(tray["tray_color"].as<const char*>());
+                // Prefer tray_sub_brands (more descriptive), fallback to tray_type
+                const char* name = nullptr;
+                if (tray["tray_sub_brands"].is<const char*>() &&
+                    strlen(tray["tray_sub_brands"].as<const char*>()) > 0)
+                  name = tray["tray_sub_brands"].as<const char*>();
+                else
+                  name = tray["tray_type"].as<const char*>();
+                if (name) strlcpy(t.type, name, sizeof(t.type));
+              } else {
+                t.present = false;
+                t.type[0] = '\0';
+              }
+            }
+          }
+          MQTT_LOG("AMS: %d units, active tray=%d", s.ams.unitCount, s.ams.activeTray);
+        }
+      }
+    }
+  }
+
+  // External spool (vt_tray)
+  {
+    const char* vtPos = (const char*)memmem(payload, length, "\"vt_tray\":", 10);
+    if (vtPos) {
+      const char* v = vtPos + 10;
+      while (*v == ' ' || *v == '\n' || *v == '\r' || *v == '\t') v++;
+      if (*v == '{') {
+        JsonDocument vtDoc;
+        if (!deserializeJson(vtDoc, v)) {
+          if (vtDoc["tray_type"].is<const char*>()) {
+            s.ams.vtPresent = true;
+            if (vtDoc["tray_color"].is<const char*>())
+              s.ams.vtColorRgb565 = bambuColorToRgb565(vtDoc["tray_color"].as<const char*>());
+            const char* name = nullptr;
+            if (vtDoc["tray_sub_brands"].is<const char*>() &&
+                strlen(vtDoc["tray_sub_brands"].as<const char*>()) > 0)
+              name = vtDoc["tray_sub_brands"].as<const char*>();
+            else
+              name = vtDoc["tray_type"].as<const char*>();
+            if (name) strlcpy(s.ams.vtType, name, sizeof(s.ams.vtType));
+          }
+        }
+      }
+    }
+  }
+
   JsonObject print = doc["print"];
   if (print.isNull()) {
     return;  // no print data in this message

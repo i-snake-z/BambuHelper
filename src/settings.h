@@ -86,6 +86,9 @@ void saveCloudEmail(const char* email);
 uint16_t htmlToRgb565(const char* hex);
 void rgb565ToHtml(uint16_t color, char* buf);  // buf must be >= 8 chars
 
+// Bambu RRGGBBAA hex to RGB565 (e.g. "9D432CFF" -> RGB565)
+uint16_t bambuColorToRgb565(const char* rrggbbaa);
+
 // Load default display settings
 void defaultDisplaySettings(DisplaySettings& ds);
 

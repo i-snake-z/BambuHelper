@@ -345,10 +345,10 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
   </div>
 </div>
 
-<!-- ===== Section 3: Multi-Printer ===== -->
+<!-- ===== Section 3: Hardware & Multi-Printer ===== -->
 <div class="section" id="s-rotate">
   <div class="section-header" onclick="toggleSection('rotate')">
-    <h2>Multi-Printer</h2>
+    <h2>Hardware &amp; Multi-Printer</h2>
     <span class="arrow" id="arr-rotate">&#9654;</span>
   </div>
   <div class="section-content" id="sec-rotate">
@@ -394,6 +394,8 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
             <input type="number" id="buzqe" min="0" max="23" value="%BUZ_QE%" style="width:60px" placeholder="7">
             <span style="font-size:11px;color:#8B949E">(0-0 = off)</span>
           </div>
+          <button type="button" id="buzTestBtn" class="btn btn-blue" style="margin-top:12px;width:auto;padding:8px 16px"
+                  onclick="testBuzzer()">Test: Print Finished</button>
         </div>
       </div>
 
@@ -606,7 +608,7 @@ function cloudLogout(){
   });
 }
 
-// --- Multi-Printer rotation & button ---
+// --- Hardware & Multi-Printer ---
 function toggleBtnPin(){
   document.getElementById('btnPinRow').style.display=
     document.getElementById('btntype').value==='0'?'none':'block';
@@ -618,6 +620,22 @@ function toggleBuzPin(){
     document.getElementById('buzzen').value==='0'?'none':'block';
 }
 toggleBuzPin();
+
+var buzTestSounds=[
+  {id:0, name:'Print Finished'},
+  {id:1, name:'Error'},
+  {id:2, name:'Connected'}
+];
+var buzTestIdx=0;
+function testBuzzer(){
+  var snd=buzTestSounds[buzTestIdx];
+  fetch('/buzzer/test',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'sound='+snd.id})
+    .then(function(r){return r.json();})
+    .then(function(d){if(d.status==='ok') showToast('Playing: '+snd.name);})
+    .catch(function(){showToast('Error');});
+  buzTestIdx=(buzTestIdx+1)%buzTestSounds.length;
+  document.getElementById('buzTestBtn').textContent='Test: '+buzTestSounds[buzTestIdx].name;
+}
 
 function saveRotation(){
   var p=new URLSearchParams();
@@ -1200,6 +1218,14 @@ static void handlePrinterConfig() {
   server.send(200, "application/json", json);
 }
 
+// Test buzzer from web UI
+static void handleBuzzerTest() {
+  uint8_t snd = 0;
+  if (server.hasArg("sound")) snd = server.arg("sound").toInt();
+  if (snd <= 2) buzzerPlay((BuzzerEvent)snd);
+  server.send(200, "application/json", "{\"status\":\"ok\"}");
+}
+
 // Save rotation settings (multi-printer)
 static void handleSaveRotation() {
   if (server.hasArg("rotmode")) {
@@ -1497,6 +1523,7 @@ void initWebServer() {
   server.on("/save/wifi", HTTP_POST, handleSaveWifi);
   server.on("/save/printer", HTTP_POST, handleSavePrinter);
   server.on("/save/rotation", HTTP_POST, handleSaveRotation);
+  server.on("/buzzer/test", HTTP_POST, handleBuzzerTest);
   server.on("/printer/config", HTTP_GET, handlePrinterConfig);
   server.on("/apply", HTTP_POST, handleApply);
   server.on("/status", HTTP_GET, handleStatus);
