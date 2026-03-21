@@ -16,6 +16,8 @@ struct DisplaySettings {
   uint8_t  rotation;       // 0, 1, 2, 3 (x90 degrees)
   uint16_t bgColor;        // background color
   uint16_t trackColor;     // inactive arc track color
+  bool     animatedBar;    // shimmer effect on progress bar
+  bool     pongClock;      // Pong/Breakout animated clock
   GaugeColors progress;
   GaugeColors nozzle;
   GaugeColors bed;
@@ -32,8 +34,8 @@ struct NetworkSettings {
   char subnet[16];
   char dns[16];
   bool showIPAtStartup;   // show IP screen for 3s after WiFi connects
-  int16_t gmtOffsetMin;   // timezone offset in minutes (e.g. 60 = UTC+1, 330 = UTC+5:30)
-  bool dstEnabled;        // daylight saving time (+1h)
+  uint8_t timezoneIndex;  // index into timezoneDatabase[]
+  char timezoneStr[64];   // POSIX TZ string (e.g. "CET-1CEST,M3.5.0/02:00,M10.5.0/03:00")
   bool use24h;            // true = 24h format (default), false = 12h AM/PM
 };
 
@@ -47,6 +49,14 @@ struct DisplayPowerSettings {
 // Button type
 enum ButtonType : uint8_t { BTN_DISABLED = 0, BTN_PUSH = 1, BTN_TOUCH = 2 };
 
+// Buzzer settings
+struct BuzzerSettings {
+  bool enabled;
+  uint8_t pin;
+  uint8_t quietStartHour;   // quiet hours start (0-23), 0 = disabled
+  uint8_t quietEndHour;     // quiet hours end (0-23)
+};
+
 extern char wifiSSID[33];
 extern char wifiPass[65];
 extern uint8_t brightness;
@@ -55,12 +65,14 @@ extern NetworkSettings netSettings;
 extern DisplayPowerSettings dpSettings;
 extern ButtonType buttonType;
 extern uint8_t buttonPin;
+extern BuzzerSettings buzzerSettings;
 
 void loadSettings();
 void saveSettings();
 void savePrinterConfig(uint8_t index);
 void saveRotationSettings();
 void saveButtonSettings();
+void saveBuzzerSettings();
 void resetSettings();
 
 // Cloud token persistence (shared across printer slots)

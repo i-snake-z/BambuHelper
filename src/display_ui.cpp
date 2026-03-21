@@ -2,6 +2,7 @@
 #include "display_gauges.h"
 #include "display_anim.h"
 #include "clock_mode.h"
+#include "clock_pong.h"
 #include "icons.h"
 #include "config.h"
 #include "bambu_state.h"
@@ -11,6 +12,10 @@
 #include <time.h>
 
 TFT_eSPI tft = TFT_eSPI();
+
+// Use user-configured bg color instead of hardcoded CLR_BG
+#undef  CLR_BG
+#define CLR_BG  (dispSettings.bgColor)
 
 static ScreenState currentScreen = SCREEN_SPLASH;
 static ScreenState prevScreen = SCREEN_SPLASH;
@@ -213,10 +218,12 @@ static void drawConnectingMQTT() {
   int16_t tw = tft.textWidth("Connecting to Printer");
   drawAnimDots(tft, SCREEN_W / 2 + tw / 2, SCREEN_H / 2 - 6, CLR_TEXT);
 
+  tft.setTextDatum(MC_DATUM);  // restore after drawAnimDots
+
   // Show connection mode + printer info
   PrinterSlot& p = displayedPrinter();
   tft.setTextColor(CLR_TEXT_DIM, CLR_BG);
-  tft.setTextFont(1);
+  tft.setTextFont(2);
 
   const char* modeStr = isCloudMode(p.config.mode) ? "Cloud" : "LAN";
   char infoBuf[40];
@@ -234,8 +241,8 @@ static void drawConnectingMQTT() {
     unsigned long elapsed = (millis() - connectScreenStart) / 1000;
     char elBuf[16];
     snprintf(elBuf, sizeof(elBuf), "%lus", elapsed);
-    tft.fillRect(SCREEN_W / 2 - 20, SCREEN_H / 2 + 28, 40, 12, CLR_BG);
-    tft.drawString(elBuf, SCREEN_W / 2, SCREEN_H / 2 + 34);
+    tft.fillRect(SCREEN_W / 2 - 30, SCREEN_H / 2 + 32, 60, 16, CLR_BG);
+    tft.drawString(elBuf, SCREEN_W / 2, SCREEN_H / 2 + 40);
   }
 
   // Diagnostics info
@@ -515,10 +522,16 @@ static void drawPrinting() {
       tft.setTextColor(CLR_RED, CLR_BG);
       tft.drawString("ERROR!", SCREEN_W / 2, 207);
     } else if (s.remainingMinutes > 0) {
+      // Use time() directly - avoids getLocalTime() race condition with timeout 0.
+      // Once NTP syncs the RTC keeps running; ntpSynced latches true forever.
+      static bool ntpSynced = false;
+      time_t nowEpoch = time(nullptr);
       struct tm now;
-      if (getLocalTime(&now, 0)) {
+      localtime_r(&nowEpoch, &now);
+      if (now.tm_year > (2020 - 1900)) ntpSynced = true;
+
+      if (ntpSynced) {
         // Calculate ETA: current time + remaining minutes
-        time_t nowEpoch = mktime(&now);
         time_t etaEpoch = nowEpoch + (time_t)s.remainingMinutes * 60;
         struct tm etaTm;
         localtime_r(&etaEpoch, &etaTm);
@@ -549,7 +562,7 @@ static void drawPrinting() {
         tft.setTextColor(CLR_GREEN, CLR_BG);
         tft.drawString(etaBuf, SCREEN_W / 2, 207);
       } else {
-        // NTP not synced yet — show remaining time only
+        // NTP not synced yet - show remaining time only
         char remBuf[24];
         uint16_t h = s.remainingMinutes / 60;
         uint16_t m = s.remainingMinutes % 60;
@@ -698,6 +711,16 @@ static void drawFinished() {
 //  Main update (called from loop)
 // ---------------------------------------------------------------------------
 void updateDisplay() {
+  // Shimmer runs at its own cadence (~40fps), independent of display refresh
+  if (currentScreen == SCREEN_PRINTING) {
+    BambuState& sh = displayedPrinter().state;
+    tickProgressShimmer(tft, 0, sh.progress, sh.printing);
+  }
+  // Pong clock runs at ~50fps, independent of display refresh
+  if (currentScreen == SCREEN_CLOCK && dispSettings.pongClock) {
+    tickPongClock();
+  }
+
   unsigned long now = millis();
   if (now - lastDisplayUpdate < DISPLAY_UPDATE_MS) return;
   lastDisplayUpdate = now;
@@ -708,10 +731,15 @@ void updateDisplay() {
     if (prevScreen == SCREEN_OFF && currentScreen != SCREEN_OFF) {
       setBacklight(brightness);
     }
+    // Reset text size in case Pong clock left it scaled up
+    tft.setTextSize(1);
     tft.fillScreen(currentScreen == SCREEN_OFF ? TFT_BLACK : dispSettings.bgColor);
     forceRedraw = true;
     if (currentScreen == SCREEN_CONNECTING_MQTT) {
       connectScreenStart = millis();
+    }
+    if (currentScreen == SCREEN_CLOCK && dispSettings.pongClock) {
+      resetPongClock();
     }
     prevScreen = currentScreen;
   }
@@ -750,7 +778,8 @@ void updateDisplay() {
       break;
 
     case SCREEN_CLOCK:
-      drawClock();
+      if (!dispSettings.pongClock) drawClock();
+      // Pong clock is ticked before the throttle (above)
       break;
 
     case SCREEN_OFF:

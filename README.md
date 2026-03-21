@@ -111,13 +111,15 @@ Touch TTP223 button is optional, it is used to switch between printers, you may 
 
    **LAN Direct** (P1P, P1S, X1, X1C, X1E, A1, A1 Mini):
    - Printer IP address (found in printer Settings > Network)
-   - Serial number
+   - Serial number (see note below)
    - LAN access code (8 characters, from printer Settings > Network)
 
    **Bambu Cloud (All printers)**:
    - Get your Bambu Cloud access token from your browser (see [Getting a Cloud Token](#getting-a-cloud-token) below)
    - Paste the token into the web interface
-   - Enter your printer's serial number (found in Bambu Handy or on the printer's label)
+   - Enter your printer's serial number (see note below)
+
+   > **Important: Serial number is NOT the printer name.** The serial number is a 15-character code (e.g. `01P00A000000000`) found on the printer LCD under **Settings > Device > Serial Number**, or on the physical label on the back/bottom of the printer. Do not confuse it with the printer name shown in Bambu Studio (e.g. `3DP-01P-110`), which is a shortened version and will not work.
 
 8. **Save Printer Settings** - the device connects to your printer
 

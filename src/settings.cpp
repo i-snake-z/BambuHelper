@@ -1,5 +1,6 @@
 #include "settings.h"
 #include "config.h"
+#include "timezones.h"
 #include <Preferences.h>
 
 // Global state
@@ -15,6 +16,7 @@ DisplayPowerSettings dpSettings;
 char cloudEmail[64] = {0};
 ButtonType buttonType = BTN_DISABLED;
 uint8_t buttonPin = BUTTON_DEFAULT_PIN;
+BuzzerSettings buzzerSettings = { false, BUZZER_DEFAULT_PIN, 0, 0 };
 
 static Preferences prefs;
 
@@ -45,6 +47,8 @@ void defaultDisplaySettings(DisplaySettings& ds) {
   ds.rotation = 0;
   ds.bgColor = CLR_BG;
   ds.trackColor = CLR_TRACK;
+  ds.animatedBar = false;
+  ds.pongClock = false;
 
   // Progress: green arc, green label, white value
   ds.progress = { CLR_GREEN, CLR_GREEN, CLR_TEXT };
@@ -136,6 +140,8 @@ void loadSettings() {
   dispSettings.rotation = prefs.getUChar("dsp_rot", def.rotation);
   dispSettings.bgColor = prefs.getUShort("dsp_bg", def.bgColor);
   dispSettings.trackColor = prefs.getUShort("dsp_trk", def.trackColor);
+  dispSettings.animatedBar = prefs.getBool("dsp_abar", def.animatedBar);
+  dispSettings.pongClock = prefs.getBool("dsp_pong", def.pongClock);
 
   loadGaugeColors("gc_prg", dispSettings.progress, def.progress);
   loadGaugeColors("gc_noz", dispSettings.nozzle, def.nozzle);
@@ -151,8 +157,35 @@ void loadSettings() {
   strlcpy(netSettings.subnet, prefs.getString("net_sn", "255.255.255.0").c_str(), sizeof(netSettings.subnet));
   strlcpy(netSettings.dns, prefs.getString("net_dns", "").c_str(), sizeof(netSettings.dns));
   netSettings.showIPAtStartup = prefs.getBool("net_showip", true);
-  netSettings.gmtOffsetMin = prefs.getShort("net_tz", 60);  // default UTC+1 (CET)
-  netSettings.dstEnabled = prefs.getBool("net_dst", false);
+  // Timezone: load new POSIX format, migrate from old gmtOffsetMin if needed
+  String tzStr = prefs.getString("net_tzstr", "");
+  if (tzStr.length() > 0) {
+    strlcpy(netSettings.timezoneStr, tzStr.c_str(), sizeof(netSettings.timezoneStr));
+    netSettings.timezoneIndex = prefs.getUChar("net_tzidx", 3); // default: CET
+  } else {
+    // Migration: convert old gmtOffsetMin to POSIX string
+    int16_t oldOffset = prefs.getShort("net_tz", 60);
+    const char* migrated = getDefaultTimezoneForOffset(oldOffset);
+    if (migrated) {
+      strlcpy(netSettings.timezoneStr, migrated, sizeof(netSettings.timezoneStr));
+    } else {
+      strlcpy(netSettings.timezoneStr, "CET-1CEST,M3.5.0/02:00,M10.5.0/03:00", sizeof(netSettings.timezoneStr));
+    }
+    // Find matching index in database
+    size_t count;
+    const TimezoneRegion* regions = getSupportedTimezones(&count);
+    netSettings.timezoneIndex = 3; // default: CET
+    for (size_t i = 0; i < count; i++) {
+      if (strcmp(regions[i].posixString, netSettings.timezoneStr) == 0) {
+        netSettings.timezoneIndex = (uint8_t)i;
+        break;
+      }
+    }
+    // Save new format so migration only happens once
+    prefs.putString("net_tzstr", netSettings.timezoneStr);
+    prefs.putUChar("net_tzidx", netSettings.timezoneIndex);
+    Serial.printf("Timezone migrated from offset %d -> %s\n", oldOffset, netSettings.timezoneStr);
+  }
   netSettings.use24h = prefs.getBool("net_24h", true);
 
   // Display power settings
@@ -171,6 +204,12 @@ void loadSettings() {
   // Button settings
   buttonType = (ButtonType)prefs.getUChar("btn_type", BTN_DISABLED);
   buttonPin = prefs.getUChar("btn_pin", BUTTON_DEFAULT_PIN);
+
+  // Buzzer settings
+  buzzerSettings.enabled = prefs.getBool("buz_on", false);
+  buzzerSettings.pin = prefs.getUChar("buz_pin", BUZZER_DEFAULT_PIN);
+  buzzerSettings.quietStartHour = prefs.getUChar("buz_qstart", 0);
+  buzzerSettings.quietEndHour = prefs.getUChar("buz_qend", 0);
 
   // Cloud email (display only)
   strlcpy(cloudEmail, prefs.getString("cl_email", "").c_str(), sizeof(cloudEmail));
@@ -197,6 +236,8 @@ void saveSettings() {
   prefs.putUChar("dsp_rot", dispSettings.rotation);
   prefs.putUShort("dsp_bg", dispSettings.bgColor);
   prefs.putUShort("dsp_trk", dispSettings.trackColor);
+  prefs.putBool("dsp_abar", dispSettings.animatedBar);
+  prefs.putBool("dsp_pong", dispSettings.pongClock);
 
   saveGaugeColors("gc_prg", dispSettings.progress);
   saveGaugeColors("gc_noz", dispSettings.nozzle);
@@ -212,8 +253,8 @@ void saveSettings() {
   prefs.putString("net_sn", netSettings.subnet);
   prefs.putString("net_dns", netSettings.dns);
   prefs.putBool("net_showip", netSettings.showIPAtStartup);
-  prefs.putShort("net_tz", netSettings.gmtOffsetMin);
-  prefs.putBool("net_dst", netSettings.dstEnabled);
+  prefs.putString("net_tzstr", netSettings.timezoneStr);
+  prefs.putUChar("net_tzidx", netSettings.timezoneIndex);
   prefs.putBool("net_24h", netSettings.use24h);
 
   // Display power settings
@@ -269,6 +310,15 @@ void saveButtonSettings() {
   prefs.begin(NVS_NAMESPACE, false);
   prefs.putUChar("btn_type", buttonType);
   prefs.putUChar("btn_pin", buttonPin);
+  prefs.end();
+}
+
+void saveBuzzerSettings() {
+  prefs.begin(NVS_NAMESPACE, false);
+  prefs.putBool("buz_on", buzzerSettings.enabled);
+  prefs.putUChar("buz_pin", buzzerSettings.pin);
+  prefs.putUChar("buz_qstart", buzzerSettings.quietStartHour);
+  prefs.putUChar("buz_qend", buzzerSettings.quietEndHour);
   prefs.end();
 }
 

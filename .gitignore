@@ -8,3 +8,4 @@
 *.bin
 !firmware/*.bin
 *.map
+tools/pushall_dump.json

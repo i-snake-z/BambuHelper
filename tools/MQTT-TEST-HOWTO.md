@@ -5,7 +5,7 @@ Helps diagnose BambuHelper connection issues (State: UNKNOWN, no data, etc.)
 
 ## Setup (one-time)
 
-1. Install Python from [python.org/downloads](https://www.python.org/downloads/) — during install, check **"Add Python to PATH"**
+1. Install Python from [python.org/downloads](https://www.python.org/downloads/)  - during install, check **"Add Python to PATH"**
 2. Open Command Prompt (or Terminal on Mac) and run:
    ```
    pip install paho-mqtt
@@ -44,11 +44,11 @@ Helps diagnose BambuHelper connection issues (State: UNKNOWN, no data, etc.)
 
 | Result | Meaning |
 |--------|---------|
-| **TCP FAIL** | Printer not reachable — check IP, same network, printer powered on |
-| **TLS FAIL** | TLS handshake failed — firewall or printer firmware issue |
-| **MQTT auth FAIL (rc=4/5)** | Wrong Access Code — re-check on printer LCD |
-| **No messages** | Serial number mismatch — MQTT topics are case-sensitive, serial MUST be uppercase |
-| **All PASS** | Printer works fine — issue is in BambuHelper config on the ESP |
+| **TCP FAIL** | Printer not reachable  - check IP, same network, printer powered on |
+| **TLS FAIL** | TLS handshake failed  - firewall or printer firmware issue |
+| **MQTT auth FAIL (rc=4/5)** | Wrong Access Code  - re-check on printer LCD |
+| **No messages** | Serial number mismatch  - MQTT topics are case-sensitive, serial MUST be uppercase |
+| **All PASS** | Printer works fine  - issue is in BambuHelper config on the ESP |
 
 ## Sharing results
 
