@@ -1,6 +1,11 @@
 #include "display_anim.h"
 #include "config.h"
+#include "settings.h"
 #include "icons.h"
+
+// Use user-configured bg color instead of hardcoded CLR_BG
+#undef  CLR_BG
+#define CLR_BG  (dispSettings.bgColor)
 
 // ---------------------------------------------------------------------------
 //  Rotating arc spinner

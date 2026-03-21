@@ -7,9 +7,11 @@
 #include "config.h"
 #include "bambu_state.h"
 #include "button.h"
+#include "buzzer.h"
 
 static unsigned long splashEnd = 0;
 static unsigned long finishScreenStart = 0;
+static char prevGcodeState[MAX_ACTIVE_PRINTERS][16] = {{0}};
 
 // ---------------------------------------------------------------------------
 //  Display rotation logic (multi-printer)
@@ -104,6 +106,7 @@ void loop() {
     initWebServer();
     initBambuMqtt();
     initButton();
+    initBuzzer();
   }
 
   if (splashEnd > 0) {
@@ -170,6 +173,7 @@ void loop() {
       if (current != SCREEN_FINISHED && current != SCREEN_OFF && current != SCREEN_CLOCK) {
         setScreenState(SCREEN_FINISHED);
         finishScreenStart = millis();
+        buzzerPlay(BUZZ_PRINT_FINISHED);
       }
       // Only turn off/clock after timeout if NO printer is still printing
       if (current == SCREEN_FINISHED && !dpSettings.keepDisplayOn &&
@@ -203,5 +207,18 @@ void loop() {
     }
   }
 
+  // Check for error state transition on any printer
+  for (uint8_t i = 0; i < MAX_ACTIVE_PRINTERS; i++) {
+    if (!isPrinterConfigured(i)) continue;
+    BambuState& ps = printers[i].state;
+    if (strcmp(ps.gcodeState, "FAILED") == 0 &&
+        strcmp(prevGcodeState[i], "FAILED") != 0 &&
+        prevGcodeState[i][0] != '\0') {
+      buzzerPlay(BUZZ_ERROR);
+    }
+    strlcpy(prevGcodeState[i], ps.gcodeState, sizeof(prevGcodeState[i]));
+  }
+
+  buzzerTick();
   updateDisplay();
 }

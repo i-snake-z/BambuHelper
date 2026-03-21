@@ -37,6 +37,88 @@ void drawLedProgressBar(TFT_eSPI& tft, int16_t y, uint8_t progress) {
 }
 
 // ---------------------------------------------------------------------------
+//  Shimmer animation for progress bar
+// ---------------------------------------------------------------------------
+static int16_t shimmerPos = -1;       // current x offset within filled area
+static unsigned long shimmerLastMs = 0;
+static bool shimmerPaused = false;
+static unsigned long shimmerPauseStart = 0;
+
+static const int16_t SHIMMER_W = 12;       // width of highlight
+static const uint16_t SHIMMER_INTERVAL = 25;  // ms between steps (~40fps)
+static const uint16_t SHIMMER_PAUSE = 1200;   // ms pause between sweeps
+static const int16_t SHIMMER_STEP = 3;       // pixels per step
+
+void tickProgressShimmer(TFT_eSPI& tft, int16_t y, uint8_t progress, bool printing) {
+  if (!dispSettings.animatedBar || !printing || progress == 0) return;
+
+  unsigned long now = millis();
+
+  // Handle pause between sweeps
+  if (shimmerPaused) {
+    if (now - shimmerPauseStart < SHIMMER_PAUSE) return;
+    shimmerPaused = false;
+    shimmerPos = 0;
+  }
+
+  if (now - shimmerLastMs < SHIMMER_INTERVAL) return;
+  shimmerLastMs = now;
+
+  const int16_t barW = 236;
+  const int16_t barH = 5;
+  const int16_t barX = (SCREEN_W - barW) / 2;
+  int16_t fillW = (progress * barW) / 100;
+  if (fillW < SHIMMER_W + 4) return;  // too small for shimmer
+
+  uint16_t barColor = dispSettings.progress.arc;
+
+  // Erase previous shimmer position (redraw base bar segment)
+  if (shimmerPos > 0) {
+    int16_t eraseX = barX + shimmerPos - SHIMMER_STEP;
+    int16_t eraseW = SHIMMER_STEP;
+    if (eraseX < barX) { eraseW -= (barX - eraseX); eraseX = barX; }
+    if (eraseW > 0) {
+      tft.fillRect(eraseX, y, eraseW, barH, barColor);
+    }
+  }
+
+  // Draw shimmer highlight
+  int16_t sx = barX + shimmerPos;
+  int16_t sw = SHIMMER_W;
+  if (sx + sw > barX + fillW) sw = barX + fillW - sx;
+  if (sw > 0) {
+    // Gradient-like shimmer: brighter in center
+    uint16_t bright = tft.alphaBlend(180, CLR_TEXT, barColor);
+    uint16_t mid    = tft.alphaBlend(100, CLR_TEXT, barColor);
+    // Edge pixels
+    if (sw >= 3) {
+      tft.fillRect(sx, y, 2, barH, mid);
+      tft.fillRect(sx + 2, y, sw - 4 > 0 ? sw - 4 : 1, barH, bright);
+      if (sw > 4) tft.fillRect(sx + sw - 2, y, 2, barH, mid);
+    } else {
+      tft.fillRect(sx, y, sw, barH, bright);
+    }
+  }
+
+  shimmerPos += SHIMMER_STEP;
+
+  // Reached end of filled area — restore last segment and pause
+  if (shimmerPos >= fillW) {
+    // Restore the tail
+    int16_t tailX = barX + fillW - SHIMMER_W - SHIMMER_STEP;
+    if (tailX < barX) tailX = barX;
+    tft.fillRect(tailX, y, barX + fillW - tailX, barH, barColor);
+    // Re-draw center glow line
+    uint16_t glowColor = tft.alphaBlend(160, CLR_TEXT, barColor);
+    tft.drawFastHLine(barX + 1, y + barH / 2, fillW - 2, glowColor);
+
+    shimmerPos = 0;
+    shimmerPaused = true;
+    shimmerPauseStart = now;
+  }
+}
+
+// ---------------------------------------------------------------------------
 //  Helper: draw arc track + fill, handling decrease properly
 // ---------------------------------------------------------------------------
 static void drawArcFill(TFT_eSPI& tft, int16_t cx, int16_t cy,

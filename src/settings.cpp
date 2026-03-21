@@ -15,6 +15,7 @@ DisplayPowerSettings dpSettings;
 char cloudEmail[64] = {0};
 ButtonType buttonType = BTN_DISABLED;
 uint8_t buttonPin = BUTTON_DEFAULT_PIN;
+BuzzerSettings buzzerSettings = { false, BUZZER_DEFAULT_PIN, 0, 0 };
 
 static Preferences prefs;
 
@@ -45,6 +46,7 @@ void defaultDisplaySettings(DisplaySettings& ds) {
   ds.rotation = 0;
   ds.bgColor = CLR_BG;
   ds.trackColor = CLR_TRACK;
+  ds.animatedBar = false;
 
   // Progress: green arc, green label, white value
   ds.progress = { CLR_GREEN, CLR_GREEN, CLR_TEXT };
@@ -136,6 +138,7 @@ void loadSettings() {
   dispSettings.rotation = prefs.getUChar("dsp_rot", def.rotation);
   dispSettings.bgColor = prefs.getUShort("dsp_bg", def.bgColor);
   dispSettings.trackColor = prefs.getUShort("dsp_trk", def.trackColor);
+  dispSettings.animatedBar = prefs.getBool("dsp_abar", def.animatedBar);
 
   loadGaugeColors("gc_prg", dispSettings.progress, def.progress);
   loadGaugeColors("gc_noz", dispSettings.nozzle, def.nozzle);
@@ -172,6 +175,12 @@ void loadSettings() {
   buttonType = (ButtonType)prefs.getUChar("btn_type", BTN_DISABLED);
   buttonPin = prefs.getUChar("btn_pin", BUTTON_DEFAULT_PIN);
 
+  // Buzzer settings
+  buzzerSettings.enabled = prefs.getBool("buz_on", false);
+  buzzerSettings.pin = prefs.getUChar("buz_pin", BUZZER_DEFAULT_PIN);
+  buzzerSettings.quietStartHour = prefs.getUChar("buz_qstart", 0);
+  buzzerSettings.quietEndHour = prefs.getUChar("buz_qend", 0);
+
   // Cloud email (display only)
   strlcpy(cloudEmail, prefs.getString("cl_email", "").c_str(), sizeof(cloudEmail));
 
@@ -197,6 +206,7 @@ void saveSettings() {
   prefs.putUChar("dsp_rot", dispSettings.rotation);
   prefs.putUShort("dsp_bg", dispSettings.bgColor);
   prefs.putUShort("dsp_trk", dispSettings.trackColor);
+  prefs.putBool("dsp_abar", dispSettings.animatedBar);
 
   saveGaugeColors("gc_prg", dispSettings.progress);
   saveGaugeColors("gc_noz", dispSettings.nozzle);
@@ -269,6 +279,15 @@ void saveButtonSettings() {
   prefs.begin(NVS_NAMESPACE, false);
   prefs.putUChar("btn_type", buttonType);
   prefs.putUChar("btn_pin", buttonPin);
+  prefs.end();
+}
+
+void saveBuzzerSettings() {
+  prefs.begin(NVS_NAMESPACE, false);
+  prefs.putBool("buz_on", buzzerSettings.enabled);
+  prefs.putUChar("buz_pin", buzzerSettings.pin);
+  prefs.putUChar("buz_qstart", buzzerSettings.quietStartHour);
+  prefs.putUChar("buz_qend", buzzerSettings.quietEndHour);
   prefs.end();
 }
 

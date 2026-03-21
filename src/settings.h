@@ -16,6 +16,7 @@ struct DisplaySettings {
   uint8_t  rotation;       // 0, 1, 2, 3 (x90 degrees)
   uint16_t bgColor;        // background color
   uint16_t trackColor;     // inactive arc track color
+  bool     animatedBar;    // shimmer effect on progress bar
   GaugeColors progress;
   GaugeColors nozzle;
   GaugeColors bed;
@@ -47,6 +48,14 @@ struct DisplayPowerSettings {
 // Button type
 enum ButtonType : uint8_t { BTN_DISABLED = 0, BTN_PUSH = 1, BTN_TOUCH = 2 };
 
+// Buzzer settings
+struct BuzzerSettings {
+  bool enabled;
+  uint8_t pin;
+  uint8_t quietStartHour;   // quiet hours start (0-23), 0 = disabled
+  uint8_t quietEndHour;     // quiet hours end (0-23)
+};
+
 extern char wifiSSID[33];
 extern char wifiPass[65];
 extern uint8_t brightness;
@@ -55,12 +64,14 @@ extern NetworkSettings netSettings;
 extern DisplayPowerSettings dpSettings;
 extern ButtonType buttonType;
 extern uint8_t buttonPin;
+extern BuzzerSettings buzzerSettings;
 
 void loadSettings();
 void saveSettings();
 void savePrinterConfig(uint8_t index);
 void saveRotationSettings();
 void saveButtonSettings();
+void saveBuzzerSettings();
 void resetSettings();
 
 // Cloud token persistence (shared across printer slots)

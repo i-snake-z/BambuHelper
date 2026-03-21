@@ -12,6 +12,10 @@
 
 TFT_eSPI tft = TFT_eSPI();
 
+// Use user-configured bg color instead of hardcoded CLR_BG
+#undef  CLR_BG
+#define CLR_BG  (dispSettings.bgColor)
+
 static ScreenState currentScreen = SCREEN_SPLASH;
 static ScreenState prevScreen = SCREEN_SPLASH;
 static bool forceRedraw = true;
@@ -698,6 +702,12 @@ static void drawFinished() {
 //  Main update (called from loop)
 // ---------------------------------------------------------------------------
 void updateDisplay() {
+  // Shimmer runs at its own cadence (~40fps), independent of display refresh
+  if (currentScreen == SCREEN_PRINTING) {
+    BambuState& sh = displayedPrinter().state;
+    tickProgressShimmer(tft, 0, sh.progress, sh.printing);
+  }
+
   unsigned long now = millis();
   if (now - lastDisplayUpdate < DISPLAY_UPDATE_MS) return;
   lastDisplayUpdate = now;

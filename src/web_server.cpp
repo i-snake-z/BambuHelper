@@ -7,6 +7,7 @@
 #include "display_ui.h"
 #include "config.h"
 #include "button.h"
+#include "buzzer.h"
 #include <WebServer.h>
 #include <ArduinoJson.h>
 
@@ -260,9 +261,58 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
         <input type="checkbox" id="clock" value="1" %CLOCK%>
         <label for="clock">Show clock after print (instead of screen off)</label>
       </div>
+      <div class="check-row">
+        <input type="checkbox" id="abar" value="1" %ABAR%>
+        <label for="abar">Animated progress bar (shimmer effect)</label>
+      </div>
       <div style="font-size:11px;color:#8B949E;margin-top:4px">
         Note: Without a physical button, display will show clock instead of turning off (no way to wake manually).
       </div>
+
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid #30363D">
+        <h3 style="color:#58A6FF;font-size:14px;margin-bottom:10px">Clock Settings</h3>
+        <label for="tz">Timezone</label>
+        <select id="tz">
+          <option value="-720" %TZ_N720%>UTC-12:00</option>
+          <option value="-660" %TZ_N660%>UTC-11:00</option>
+          <option value="-600" %TZ_N600%>UTC-10:00 (Hawaii)</option>
+          <option value="-540" %TZ_N540%>UTC-9:00 (Alaska)</option>
+          <option value="-480" %TZ_N480%>UTC-8:00 (Pacific)</option>
+          <option value="-420" %TZ_N420%>UTC-7:00 (Mountain)</option>
+          <option value="-360" %TZ_N360%>UTC-6:00 (Central)</option>
+          <option value="-300" %TZ_N300%>UTC-5:00 (Eastern)</option>
+          <option value="-240" %TZ_N240%>UTC-4:00 (Atlantic)</option>
+          <option value="-210" %TZ_N210%>UTC-3:30 (Newfoundland)</option>
+          <option value="-180" %TZ_N180%>UTC-3:00 (Brazil)</option>
+          <option value="-120" %TZ_N120%>UTC-2:00</option>
+          <option value="-60" %TZ_N60%>UTC-1:00 (Azores)</option>
+          <option value="0" %TZ_0%>UTC+0:00 (London)</option>
+          <option value="60" %TZ_60%>UTC+1:00 (Berlin/Paris)</option>
+          <option value="120" %TZ_120%>UTC+2:00 (Helsinki/Cairo)</option>
+          <option value="180" %TZ_180%>UTC+3:00 (Moscow)</option>
+          <option value="210" %TZ_210%>UTC+3:30 (Tehran)</option>
+          <option value="240" %TZ_240%>UTC+4:00 (Dubai)</option>
+          <option value="270" %TZ_270%>UTC+4:30 (Kabul)</option>
+          <option value="300" %TZ_300%>UTC+5:00 (Karachi)</option>
+          <option value="330" %TZ_330%>UTC+5:30 (India)</option>
+          <option value="345" %TZ_345%>UTC+5:45 (Nepal)</option>
+          <option value="360" %TZ_360%>UTC+6:00 (Dhaka)</option>
+          <option value="420" %TZ_420%>UTC+7:00 (Bangkok)</option>
+          <option value="480" %TZ_480%>UTC+8:00 (Singapore)</option>
+          <option value="540" %TZ_540%>UTC+9:00 (Tokyo)</option>
+          <option value="570" %TZ_570%>UTC+9:30 (Adelaide)</option>
+          <option value="600" %TZ_600%>UTC+10:00 (Sydney)</option>
+          <option value="660" %TZ_660%>UTC+11:00</option>
+          <option value="720" %TZ_720%>UTC+12:00 (Auckland)</option>
+        </select>
+        <div class="check-row">
+          <input type="checkbox" id="dst" value="1" %DST%>
+          <label for="dst">Daylight Saving Time (+1h)</label>
+        </div>
+        <div class="check-row">
+          <input type="checkbox" id="use24h" value="1" %USE24H%>
+          <label for="use24h">24-hour time format</label>
+        </div>
       </div>
 
       <div style="margin-top:16px;padding-top:12px;border-top:1px solid #30363D">
@@ -323,24 +373,7 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
   </div>
 </div>
 
-<!-- ===== Section 3: Diagnostics ===== -->
-<div class="section" id="s-diag">
-  <div class="section-header" onclick="toggleSection('diag')">
-    <h2>Diagnostics</h2>
-    <span class="arrow" id="arr-diag">&#9654;</span>
-  </div>
-  <div class="section-content" id="sec-diag">
-    <div class="section-body">
-      <div class="check-row">
-        <input type="checkbox" id="dbglog" onchange="toggleDebug(this.checked)" %DBGLOG%>
-        <label for="dbglog">Verbose Serial logging (USB)</label>
-      </div>
-      <div id="diagInfo" style="margin-top:10px;font-size:12px;color:#8B949E"></div>
-    </div>
-  </div>
-</div>
-
-<!-- ===== Section 4: Multi-Printer ===== -->
+<!-- ===== Section 3: Multi-Printer ===== -->
 <div class="section" id="s-rotate">
   <div class="section-header" onclick="toggleSection('rotate')">
     <h2>Multi-Printer</h2>
@@ -369,6 +402,26 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
           <label for="btnpin">Button GPIO Pin</label>
           <input type="number" id="btnpin" min="1" max="48" value="%BTN_PIN%">
           <p style="font-size:11px;color:#8B949E;margin-top:4px">Button switches between printers. Wakes display from sleep.</p>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid #30363D">
+        <label for="buzzen">Buzzer (optional)</label>
+        <select id="buzzen" onchange="toggleBuzPin()">
+          <option value="0" %BUZ_OFF%>Disabled</option>
+          <option value="1" %BUZ_ON%>Enabled</option>
+        </select>
+        <div id="buzFields" style="display:none">
+          <label for="buzpin">Buzzer GPIO Pin</label>
+          <input type="number" id="buzpin" min="1" max="48" value="%BUZ_PIN%">
+          <p style="font-size:11px;color:#8B949E;margin-top:4px">Passive buzzer. Beeps on print complete and errors.</p>
+          <label style="margin-top:8px">Quiet Hours (optional)</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="number" id="buzqs" min="0" max="23" value="%BUZ_QS%" style="width:60px" placeholder="22">
+            <span style="color:#8B949E">to</span>
+            <input type="number" id="buzqe" min="0" max="23" value="%BUZ_QE%" style="width:60px" placeholder="7">
+            <span style="font-size:11px;color:#8B949E">(0-0 = off)</span>
+          </div>
         </div>
       </div>
 
@@ -409,54 +462,46 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
         <input type="checkbox" id="showip" value="1" %SHOWIP%>
         <label for="showip">Show IP at startup (3s)</label>
       </div>
-      <label for="tz">Timezone</label>
-      <select id="tz">
-        <option value="-720" %TZ_N720%>UTC-12:00</option>
-        <option value="-660" %TZ_N660%>UTC-11:00</option>
-        <option value="-600" %TZ_N600%>UTC-10:00 (Hawaii)</option>
-        <option value="-540" %TZ_N540%>UTC-9:00 (Alaska)</option>
-        <option value="-480" %TZ_N480%>UTC-8:00 (Pacific)</option>
-        <option value="-420" %TZ_N420%>UTC-7:00 (Mountain)</option>
-        <option value="-360" %TZ_N360%>UTC-6:00 (Central)</option>
-        <option value="-300" %TZ_N300%>UTC-5:00 (Eastern)</option>
-        <option value="-240" %TZ_N240%>UTC-4:00 (Atlantic)</option>
-        <option value="-210" %TZ_N210%>UTC-3:30 (Newfoundland)</option>
-        <option value="-180" %TZ_N180%>UTC-3:00 (Brazil)</option>
-        <option value="-120" %TZ_N120%>UTC-2:00</option>
-        <option value="-60" %TZ_N60%>UTC-1:00 (Azores)</option>
-        <option value="0" %TZ_0%>UTC+0:00 (London)</option>
-        <option value="60" %TZ_60%>UTC+1:00 (Berlin/Paris)</option>
-        <option value="120" %TZ_120%>UTC+2:00 (Helsinki/Cairo)</option>
-        <option value="180" %TZ_180%>UTC+3:00 (Moscow)</option>
-        <option value="210" %TZ_210%>UTC+3:30 (Tehran)</option>
-        <option value="240" %TZ_240%>UTC+4:00 (Dubai)</option>
-        <option value="270" %TZ_270%>UTC+4:30 (Kabul)</option>
-        <option value="300" %TZ_300%>UTC+5:00 (Karachi)</option>
-        <option value="330" %TZ_330%>UTC+5:30 (India)</option>
-        <option value="345" %TZ_345%>UTC+5:45 (Nepal)</option>
-        <option value="360" %TZ_360%>UTC+6:00 (Dhaka)</option>
-        <option value="420" %TZ_420%>UTC+7:00 (Bangkok)</option>
-        <option value="480" %TZ_480%>UTC+8:00 (Singapore)</option>
-        <option value="540" %TZ_540%>UTC+9:00 (Tokyo)</option>
-        <option value="570" %TZ_570%>UTC+9:30 (Adelaide)</option>
-        <option value="600" %TZ_600%>UTC+10:00 (Sydney)</option>
-        <option value="660" %TZ_660%>UTC+11:00</option>
-        <option value="720" %TZ_720%>UTC+12:00 (Auckland)</option>
-      </select>
-      <div class="check-row">
-        <input type="checkbox" id="dst" value="1" %DST%>
-        <label for="dst">Daylight Saving Time (+1h)</label>
-      </div>
-      <div class="check-row">
-        <input type="checkbox" id="use24h" value="1" %USE24H%>
-        <label for="use24h">24-hour time format</label>
-      </div>
 
       <button type="button" class="btn btn-primary" onclick="saveWifi()">Save WiFi &amp; Restart</button>
 
       <div style="margin-top:20px;padding-top:12px;border-top:1px solid #30363D">
+        <h3 style="color:#58A6FF;font-size:14px;margin-bottom:10px">Settings Backup</h3>
+        <p style="font-size:11px;color:#8B949E;margin-bottom:10px">
+          Export/import all settings as JSON. Useful before reflashing firmware.<br>
+          Note: Cloud token is NOT included — you'll need to re-login after import.
+        </p>
+        <button type="button" class="btn btn-blue" style="display:inline-block;width:auto;padding:8px 16px"
+                onclick="exportSettings()">Export Settings</button>
+        <div style="margin-top:12px">
+          <label for="importFile" style="font-size:12px">Import Settings</label>
+          <input type="file" id="importFile" accept=".json"
+                 style="width:100%;margin-top:4px;padding:6px;background:#0D1117;border:1px solid #30363D;border-radius:6px;color:#C9D1D9">
+          <button type="button" class="btn btn-primary" style="margin-top:8px;font-size:13px;padding:8px"
+                  onclick="importSettings()">Import &amp; Restart</button>
+          <div id="importStatus" style="margin-top:8px;font-size:13px"></div>
+        </div>
+      </div>
+      <div style="margin-top:20px;padding-top:12px;border-top:1px solid #30363D">
         <button type="button" class="btn btn-danger" onclick="if(confirm('Reset all settings to factory defaults?'))location='/reset'">Factory Reset</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Section 5: Diagnostics ===== -->
+<div class="section" id="s-diag">
+  <div class="section-header" onclick="toggleSection('diag')">
+    <h2>Diagnostics</h2>
+    <span class="arrow" id="arr-diag">&#9654;</span>
+  </div>
+  <div class="section-content" id="sec-diag">
+    <div class="section-body">
+      <div class="check-row">
+        <input type="checkbox" id="dbglog" onchange="toggleDebug(this.checked)" %DBGLOG%>
+        <label for="dbglog">Verbose Serial logging (USB)</label>
+      </div>
+      <div id="diagInfo" style="margin-top:10px;font-size:12px;color:#8B949E"></div>
     </div>
   </div>
 </div>
@@ -573,9 +618,6 @@ function saveWifi(){
   p.append('net_sn',document.getElementById('net_sn').value);
   p.append('net_dns',document.getElementById('net_dns').value);
   if(document.getElementById('showip').checked) p.append('showip','1');
-  p.append('tz',document.getElementById('tz').value);
-  if(document.getElementById('dst').checked) p.append('dst','1');
-  if(document.getElementById('use24h').checked) p.append('use24h','1');
   fetch('/save/wifi',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()})
     .then(function(){
       document.body.innerHTML='<div style="text-align:center;padding-top:80px"><h2 style="color:#3FB950">WiFi Saved!</h2><p style="color:#8B949E;margin-top:10px">Restarting...</p></div>';
@@ -598,12 +640,22 @@ function toggleBtnPin(){
 }
 toggleBtnPin();
 
+function toggleBuzPin(){
+  document.getElementById('buzFields').style.display=
+    document.getElementById('buzzen').value==='0'?'none':'block';
+}
+toggleBuzPin();
+
 function saveRotation(){
   var p=new URLSearchParams();
   p.append('rotmode',document.getElementById('rotmode').value);
   p.append('rotinterval',document.getElementById('rotinterval').value);
   p.append('btntype',document.getElementById('btntype').value);
   p.append('btnpin',document.getElementById('btnpin').value);
+  p.append('buzzen',document.getElementById('buzzen').value);
+  p.append('buzpin',document.getElementById('buzpin').value);
+  p.append('buzqs',document.getElementById('buzqs').value);
+  p.append('buzqe',document.getElementById('buzqe').value);
   fetch('/save/rotation',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()})
     .then(function(r){return r.json();})
     .then(function(d){if(d.status==='ok') showToast('Settings saved');})
@@ -654,6 +706,10 @@ function applyDisplay(){
   p.append('fmins',document.getElementById('fmins').value);
   if(document.getElementById('keepon').checked) p.append('keepon','1');
   if(document.getElementById('clock').checked) p.append('clock','1');
+  if(document.getElementById('abar').checked) p.append('abar','1');
+  p.append('tz',document.getElementById('tz').value);
+  if(document.getElementById('dst').checked) p.append('dst','1');
+  if(document.getElementById('use24h').checked) p.append('use24h','1');
   p.append('clr_bg',document.getElementById('clr_bg').value);
   p.append('clr_track',document.getElementById('clr_track').value);
   var g=['prg','noz','bed','pfn','afn','cfn'];
@@ -719,6 +775,40 @@ setInterval(function(){
     if(d.display_off && d.connected){ps.textContent+=' (Display Off)';}
   }).catch(function(){});
 }, 3000);
+
+// --- Settings export/import ---
+function exportSettings(){
+  fetch('/settings/export').then(function(r){return r.text();}).then(function(t){
+    var b=new Blob([t],{type:'application/json'});
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(b);
+    a.download='bambuhelper_settings.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }).catch(function(){showToast('Export failed');});
+}
+
+function importSettings(){
+  var f=document.getElementById('importFile').files[0];
+  if(!f){showToast('Select a JSON file first');return;}
+  if(!confirm('Import settings and restart? Current settings will be overwritten.')) return;
+  var fd=new FormData();
+  fd.append('settings',f);
+  var stat=document.getElementById('importStatus');
+  stat.innerHTML='<span style="color:#58A6FF">Importing...</span>';
+  fetch('/settings/import',{method:'POST',body:fd})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.status==='ok'){
+        stat.innerHTML='<span style="color:#3FB950">'+d.message+'</span>';
+      } else {
+        stat.innerHTML='<span style="color:#F85149">Error: '+d.message+'</span>';
+      }
+    })
+    .catch(function(){
+      stat.innerHTML='<span style="color:#F85149">Upload failed</span>';
+    });
+}
 </script>
 </body>
 </html>
@@ -809,6 +899,7 @@ static String processTemplate(const String& html) {
   page.replace("%FMINS%", String(dpSettings.finishDisplayMins));
   page.replace("%KEEPON%", dpSettings.keepDisplayOn ? "checked" : "");
   page.replace("%CLOCK%", dpSettings.showClockAfterFinish ? "checked" : "");
+  page.replace("%ABAR%", dispSettings.animatedBar ? "checked" : "");
 
   // Global colors
   char buf[8];
@@ -849,6 +940,13 @@ static String processTemplate(const String& html) {
   page.replace("%BTN_PUSH%", buttonType == BTN_PUSH ? "selected" : "");
   page.replace("%BTN_TOUCH%", buttonType == BTN_TOUCH ? "selected" : "");
   page.replace("%BTN_PIN%", String(buttonPin));
+
+  // Buzzer settings
+  page.replace("%BUZ_OFF%", buzzerSettings.enabled ? "" : "selected");
+  page.replace("%BUZ_ON%", buzzerSettings.enabled ? "selected" : "");
+  page.replace("%BUZ_PIN%", String(buzzerSettings.pin));
+  page.replace("%BUZ_QS%", String(buzzerSettings.quietStartHour));
+  page.replace("%BUZ_QE%", String(buzzerSettings.quietEndHour));
 
   return page;
 }
@@ -893,6 +991,12 @@ static void readDisplayFromForm() {
   }
   dpSettings.keepDisplayOn = server.hasArg("keepon");
   dpSettings.showClockAfterFinish = server.hasArg("clock");
+  dispSettings.animatedBar = server.hasArg("abar");
+
+  // Clock settings (timezone, DST, 24h)
+  if (server.hasArg("tz")) netSettings.gmtOffsetMin = server.arg("tz").toInt();
+  netSettings.dstEnabled = server.hasArg("dst");
+  netSettings.use24h = server.hasArg("use24h");
 }
 
 // ---------------------------------------------------------------------------
@@ -995,9 +1099,6 @@ static void handleSaveWifi() {
   if (server.hasArg("net_sn"))  strlcpy(netSettings.subnet, server.arg("net_sn").c_str(), sizeof(netSettings.subnet));
   if (server.hasArg("net_dns")) strlcpy(netSettings.dns, server.arg("net_dns").c_str(), sizeof(netSettings.dns));
   netSettings.showIPAtStartup = server.hasArg("showip");
-  if (server.hasArg("tz")) netSettings.gmtOffsetMin = server.arg("tz").toInt();
-  netSettings.dstEnabled = server.hasArg("dst");
-  netSettings.use24h = server.hasArg("use24h");
 
   saveSettings();
 
@@ -1011,6 +1112,10 @@ static void handleApply() {
   readDisplayFromForm();
   saveSettings();
   applyDisplaySettings();
+  // Re-apply NTP if timezone changed
+  long dstOffset = netSettings.dstEnabled ? 3600 : 0;
+  configTime(netSettings.gmtOffsetMin * 60L, dstOffset,
+             "pool.ntp.org", "time.nist.gov");
   server.send(200, "text/plain", "OK");
 }
 
@@ -1140,7 +1245,247 @@ static void handleSaveRotation() {
   saveButtonSettings();
   initButton();
 
+  // Buzzer settings
+  if (server.hasArg("buzzen")) {
+    buzzerSettings.enabled = (server.arg("buzzen") == "1");
+  }
+  if (server.hasArg("buzpin")) {
+    uint8_t bp = server.arg("buzpin").toInt();
+    if (bp > 0 && bp <= 48) buzzerSettings.pin = bp;
+  }
+  if (server.hasArg("buzqs")) buzzerSettings.quietStartHour = server.arg("buzqs").toInt();
+  if (server.hasArg("buzqe")) buzzerSettings.quietEndHour = server.arg("buzqe").toInt();
+  saveBuzzerSettings();
+  initBuzzer();
+
   server.send(200, "application/json", "{\"status\":\"ok\"}");
+}
+
+// ---------------------------------------------------------------------------
+//  Settings export (JSON download)
+// ---------------------------------------------------------------------------
+static void gaugeColorsToJson(JsonObject& obj, const GaugeColors& gc) {
+  char buf[8];
+  rgb565ToHtml(gc.arc, buf);   obj["arc"] = String(buf);
+  rgb565ToHtml(gc.label, buf); obj["label"] = String(buf);
+  rgb565ToHtml(gc.value, buf); obj["value"] = String(buf);
+}
+
+static void handleSettingsExport() {
+  JsonDocument doc;
+  doc["_type"] = "bambuhelper_settings";
+  doc["_version"] = FW_VERSION;
+
+  // WiFi
+  JsonObject wifi = doc["wifi"].to<JsonObject>();
+  wifi["ssid"] = wifiSSID;
+  wifi["pass"] = wifiPass;
+
+  // Printers
+  JsonArray pArr = doc["printers"].to<JsonArray>();
+  for (uint8_t i = 0; i < MAX_PRINTERS; i++) {
+    PrinterConfig& cfg = printers[i].config;
+    JsonObject p = pArr.add<JsonObject>();
+    p["mode"] = (uint8_t)cfg.mode;
+    p["name"] = cfg.name;
+    p["ip"] = cfg.ip;
+    p["serial"] = cfg.serial;
+    p["accessCode"] = cfg.accessCode;
+    p["cloudUserId"] = cfg.cloudUserId;
+    p["region"] = (uint8_t)cfg.region;
+  }
+
+  // Display
+  char buf[8];
+  JsonObject disp = doc["display"].to<JsonObject>();
+  disp["brightness"] = brightness;
+  disp["rotation"] = dispSettings.rotation;
+  rgb565ToHtml(dispSettings.bgColor, buf);    disp["bgColor"] = String(buf);
+  rgb565ToHtml(dispSettings.trackColor, buf); disp["trackColor"] = String(buf);
+  disp["animatedBar"] = dispSettings.animatedBar;
+
+  JsonObject gauges = disp["gauges"].to<JsonObject>();
+  JsonObject gPrg = gauges["progress"].to<JsonObject>(); gaugeColorsToJson(gPrg, dispSettings.progress);
+  JsonObject gNoz = gauges["nozzle"].to<JsonObject>();   gaugeColorsToJson(gNoz, dispSettings.nozzle);
+  JsonObject gBed = gauges["bed"].to<JsonObject>();      gaugeColorsToJson(gBed, dispSettings.bed);
+  JsonObject gPfn = gauges["partFan"].to<JsonObject>();  gaugeColorsToJson(gPfn, dispSettings.partFan);
+  JsonObject gAfn = gauges["auxFan"].to<JsonObject>();   gaugeColorsToJson(gAfn, dispSettings.auxFan);
+  JsonObject gCfn = gauges["chamberFan"].to<JsonObject>(); gaugeColorsToJson(gCfn, dispSettings.chamberFan);
+
+  // Display power
+  JsonObject dp = doc["displayPower"].to<JsonObject>();
+  dp["finishDisplayMins"] = dpSettings.finishDisplayMins;
+  dp["keepDisplayOn"] = dpSettings.keepDisplayOn;
+  dp["showClockAfterFinish"] = dpSettings.showClockAfterFinish;
+
+  // Network
+  JsonObject net = doc["network"].to<JsonObject>();
+  net["useDHCP"] = netSettings.useDHCP;
+  net["staticIP"] = netSettings.staticIP;
+  net["gateway"] = netSettings.gateway;
+  net["subnet"] = netSettings.subnet;
+  net["dns"] = netSettings.dns;
+  net["gmtOffsetMin"] = netSettings.gmtOffsetMin;
+  net["dstEnabled"] = netSettings.dstEnabled;
+  net["use24h"] = netSettings.use24h;
+
+  // Rotation
+  JsonObject rot = doc["rotation"].to<JsonObject>();
+  rot["mode"] = (uint8_t)rotState.mode;
+  rot["intervalMs"] = rotState.intervalMs;
+
+  // Button
+  JsonObject btn = doc["button"].to<JsonObject>();
+  btn["type"] = (uint8_t)buttonType;
+  btn["pin"] = buttonPin;
+
+  // Buzzer
+  JsonObject buz = doc["buzzer"].to<JsonObject>();
+  buz["enabled"] = buzzerSettings.enabled;
+  buz["pin"] = buzzerSettings.pin;
+  buz["quietStart"] = buzzerSettings.quietStartHour;
+  buz["quietEnd"] = buzzerSettings.quietEndHour;
+
+  String json;
+  serializeJsonPretty(doc, json);
+
+  server.sendHeader("Content-Disposition", "attachment; filename=\"bambuhelper_settings.json\"");
+  server.send(200, "application/json", json);
+}
+
+// ---------------------------------------------------------------------------
+//  Settings import (JSON upload)
+// ---------------------------------------------------------------------------
+static String settingsImportBuf;
+
+static void gaugeColorsFromJson(JsonObject obj, GaugeColors& gc) {
+  if (obj["arc"].is<const char*>())   gc.arc   = htmlToRgb565(obj["arc"]);
+  if (obj["label"].is<const char*>()) gc.label = htmlToRgb565(obj["label"]);
+  if (obj["value"].is<const char*>()) gc.value = htmlToRgb565(obj["value"]);
+}
+
+static void handleSettingsImportUpload() {
+  HTTPUpload& upload = server.upload();
+  if (upload.status == UPLOAD_FILE_START) {
+    settingsImportBuf = "";
+    settingsImportBuf.reserve(4096);
+  } else if (upload.status == UPLOAD_FILE_WRITE) {
+    if (settingsImportBuf.length() + upload.currentSize > 8192) return;
+    for (size_t i = 0; i < upload.currentSize; i++)
+      settingsImportBuf += (char)upload.buf[i];
+  }
+}
+
+static void handleSettingsImportFinish() {
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, settingsImportBuf);
+  settingsImportBuf = "";  // free memory
+
+  if (err) {
+    server.send(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
+    return;
+  }
+  if (!doc["_type"].is<const char*>() || strcmp(doc["_type"], "bambuhelper_settings") != 0) {
+    server.send(400, "application/json", "{\"status\":\"error\",\"message\":\"Not a BambuHelper settings file\"}");
+    return;
+  }
+
+  // WiFi
+  JsonObject wifi = doc["wifi"];
+  if (wifi) {
+    if (wifi["ssid"].is<const char*>()) strlcpy(wifiSSID, wifi["ssid"], sizeof(wifiSSID));
+    if (wifi["pass"].is<const char*>()) strlcpy(wifiPass, wifi["pass"], sizeof(wifiPass));
+  }
+
+  // Printers
+  JsonArray pArr = doc["printers"];
+  if (pArr) {
+    for (uint8_t i = 0; i < MAX_PRINTERS && i < pArr.size(); i++) {
+      JsonObject p = pArr[i];
+      PrinterConfig& cfg = printers[i].config;
+      if (p["mode"].is<uint8_t>())            cfg.mode = (ConnMode)p["mode"].as<uint8_t>();
+      if (p["name"].is<const char*>())        strlcpy(cfg.name, p["name"], sizeof(cfg.name));
+      if (p["ip"].is<const char*>())          strlcpy(cfg.ip, p["ip"], sizeof(cfg.ip));
+      if (p["serial"].is<const char*>())      strlcpy(cfg.serial, p["serial"], sizeof(cfg.serial));
+      if (p["accessCode"].is<const char*>())  strlcpy(cfg.accessCode, p["accessCode"], sizeof(cfg.accessCode));
+      if (p["cloudUserId"].is<const char*>()) strlcpy(cfg.cloudUserId, p["cloudUserId"], sizeof(cfg.cloudUserId));
+      if (p["region"].is<uint8_t>())          cfg.region = (CloudRegion)p["region"].as<uint8_t>();
+    }
+  }
+
+  // Display
+  JsonObject disp = doc["display"];
+  if (disp) {
+    if (disp["brightness"].is<uint8_t>()) brightness = disp["brightness"].as<uint8_t>();
+    if (disp["rotation"].is<uint8_t>())   dispSettings.rotation = disp["rotation"].as<uint8_t>();
+    if (disp["bgColor"].is<const char*>())    dispSettings.bgColor = htmlToRgb565(disp["bgColor"]);
+    if (disp["trackColor"].is<const char*>()) dispSettings.trackColor = htmlToRgb565(disp["trackColor"]);
+    if (disp["animatedBar"].is<bool>())       dispSettings.animatedBar = disp["animatedBar"].as<bool>();
+
+    JsonObject gauges = disp["gauges"];
+    if (gauges) {
+      if (gauges["progress"].is<JsonObject>()) { JsonObject g = gauges["progress"]; gaugeColorsFromJson(g, dispSettings.progress); }
+      if (gauges["nozzle"].is<JsonObject>())   { JsonObject g = gauges["nozzle"];   gaugeColorsFromJson(g, dispSettings.nozzle); }
+      if (gauges["bed"].is<JsonObject>())      { JsonObject g = gauges["bed"];      gaugeColorsFromJson(g, dispSettings.bed); }
+      if (gauges["partFan"].is<JsonObject>())  { JsonObject g = gauges["partFan"];  gaugeColorsFromJson(g, dispSettings.partFan); }
+      if (gauges["auxFan"].is<JsonObject>())   { JsonObject g = gauges["auxFan"];   gaugeColorsFromJson(g, dispSettings.auxFan); }
+      if (gauges["chamberFan"].is<JsonObject>()){ JsonObject g = gauges["chamberFan"]; gaugeColorsFromJson(g, dispSettings.chamberFan); }
+    }
+  }
+
+  // Display power
+  JsonObject dp = doc["displayPower"];
+  if (dp) {
+    if (dp["finishDisplayMins"].is<uint16_t>()) dpSettings.finishDisplayMins = dp["finishDisplayMins"].as<uint16_t>();
+    if (dp["keepDisplayOn"].is<bool>())         dpSettings.keepDisplayOn = dp["keepDisplayOn"].as<bool>();
+    if (dp["showClockAfterFinish"].is<bool>())  dpSettings.showClockAfterFinish = dp["showClockAfterFinish"].as<bool>();
+  }
+
+  // Network
+  JsonObject net = doc["network"];
+  if (net) {
+    if (net["useDHCP"].is<bool>())            netSettings.useDHCP = net["useDHCP"].as<bool>();
+    if (net["staticIP"].is<const char*>())    strlcpy(netSettings.staticIP, net["staticIP"], sizeof(netSettings.staticIP));
+    if (net["gateway"].is<const char*>())     strlcpy(netSettings.gateway, net["gateway"], sizeof(netSettings.gateway));
+    if (net["subnet"].is<const char*>())      strlcpy(netSettings.subnet, net["subnet"], sizeof(netSettings.subnet));
+    if (net["dns"].is<const char*>())         strlcpy(netSettings.dns, net["dns"], sizeof(netSettings.dns));
+    if (net["gmtOffsetMin"].is<int16_t>())    netSettings.gmtOffsetMin = net["gmtOffsetMin"].as<int16_t>();
+    if (net["dstEnabled"].is<bool>())         netSettings.dstEnabled = net["dstEnabled"].as<bool>();
+    if (net["use24h"].is<bool>())             netSettings.use24h = net["use24h"].as<bool>();
+  }
+
+  // Rotation
+  JsonObject rot = doc["rotation"];
+  if (rot) {
+    if (rot["mode"].is<uint8_t>())      rotState.mode = (RotateMode)rot["mode"].as<uint8_t>();
+    if (rot["intervalMs"].is<uint32_t>()) rotState.intervalMs = rot["intervalMs"].as<uint32_t>();
+  }
+
+  // Button
+  JsonObject btn = doc["button"];
+  if (btn) {
+    if (btn["type"].is<uint8_t>()) buttonType = (ButtonType)btn["type"].as<uint8_t>();
+    if (btn["pin"].is<uint8_t>())  buttonPin = btn["pin"].as<uint8_t>();
+  }
+
+  // Buzzer
+  JsonObject buz = doc["buzzer"];
+  if (buz) {
+    if (buz["enabled"].is<bool>())    buzzerSettings.enabled = buz["enabled"].as<bool>();
+    if (buz["pin"].is<uint8_t>())     buzzerSettings.pin = buz["pin"].as<uint8_t>();
+    if (buz["quietStart"].is<uint8_t>()) buzzerSettings.quietStartHour = buz["quietStart"].as<uint8_t>();
+    if (buz["quietEnd"].is<uint8_t>())   buzzerSettings.quietEndHour = buz["quietEnd"].as<uint8_t>();
+  }
+
+  // Save everything to NVS
+  saveSettings();
+  saveRotationSettings();
+  saveButtonSettings();
+  saveBuzzerSettings();
+
+  server.send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Settings imported. Restarting...\"}");
+  delay(1000);
+  ESP.restart();
 }
 
 // Captive portal: redirect any unknown request to root
@@ -1168,6 +1513,8 @@ void initWebServer() {
   server.on("/debug", HTTP_GET, handleDebug);
   server.on("/debug/toggle", HTTP_POST, handleDebugToggle);
   server.on("/cloud/logout", HTTP_POST, handleCloudLogout);
+  server.on("/settings/export", HTTP_GET, handleSettingsExport);
+  server.on("/settings/import", HTTP_POST, handleSettingsImportFinish, handleSettingsImportUpload);
   server.onNotFound(handleNotFound);
   server.begin();
   Serial.println("Web server started on port 80");
