@@ -267,6 +267,10 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
         <input type="checkbox" id="abar" value="1" %ABAR%>
         <label for="abar">Animated progress bar (shimmer effect)</label>
       </div>
+      <div class="check-row">
+        <input type="checkbox" id="pong" value="1" %PONG%>
+        <label for="pong">Pong clock (animated Breakout game as clock screen)</label>
+      </div>
       <div style="font-size:11px;color:#8B949E;margin-top:4px">
         Note: Without a physical button, display will show clock instead of turning off (no way to wake manually).
       </div>
@@ -676,6 +680,7 @@ function applyDisplay(){
   if(document.getElementById('keepon').checked) p.append('keepon','1');
   if(document.getElementById('clock').checked) p.append('clock','1');
   if(document.getElementById('abar').checked) p.append('abar','1');
+  if(document.getElementById('pong').checked) p.append('pong','1');
   p.append('tz',document.getElementById('tz').value);
   if(document.getElementById('use24h').checked) p.append('use24h','1');
   p.append('clr_bg',document.getElementById('clr_bg').value);
@@ -747,12 +752,12 @@ setInterval(function(){
 // --- Settings export/import ---
 function exportSettings(){
   fetch('/settings/export').then(function(r){return r.text();}).then(function(t){
-    var b=new Blob([t],{type:'application/json'});
     var a=document.createElement('a');
-    a.href=URL.createObjectURL(b);
+    a.href='data:application/json;charset=utf-8,'+encodeURIComponent(t);
     a.download='bambuhelper_settings.json';
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(a.href);
+    document.body.removeChild(a);
   }).catch(function(){showToast('Export failed');});
 }
 
@@ -870,6 +875,7 @@ static String processTemplate(const String& html) {
   page.replace("%KEEPON%", dpSettings.keepDisplayOn ? "checked" : "");
   page.replace("%CLOCK%", dpSettings.showClockAfterFinish ? "checked" : "");
   page.replace("%ABAR%", dispSettings.animatedBar ? "checked" : "");
+  page.replace("%PONG%", dispSettings.pongClock ? "checked" : "");
 
   // Global colors
   char buf[8];
@@ -962,6 +968,7 @@ static void readDisplayFromForm() {
   dpSettings.keepDisplayOn = server.hasArg("keepon");
   dpSettings.showClockAfterFinish = server.hasArg("clock");
   dispSettings.animatedBar = server.hasArg("abar");
+  dispSettings.pongClock = server.hasArg("pong");
 
   // Clock settings (timezone, 24h)
   if (server.hasArg("tz")) {
@@ -1278,6 +1285,7 @@ static void handleSettingsExport() {
   rgb565ToHtml(dispSettings.bgColor, buf);    disp["bgColor"] = String(buf);
   rgb565ToHtml(dispSettings.trackColor, buf); disp["trackColor"] = String(buf);
   disp["animatedBar"] = dispSettings.animatedBar;
+  disp["pongClock"] = dispSettings.pongClock;
 
   JsonObject gauges = disp["gauges"].to<JsonObject>();
   JsonObject gPrg = gauges["progress"].to<JsonObject>(); gaugeColorsToJson(gPrg, dispSettings.progress);
@@ -1396,6 +1404,7 @@ static void handleSettingsImportFinish() {
     if (disp["bgColor"].is<const char*>())    dispSettings.bgColor = htmlToRgb565(disp["bgColor"]);
     if (disp["trackColor"].is<const char*>()) dispSettings.trackColor = htmlToRgb565(disp["trackColor"]);
     if (disp["animatedBar"].is<bool>())       dispSettings.animatedBar = disp["animatedBar"].as<bool>();
+    if (disp["pongClock"].is<bool>())         dispSettings.pongClock = disp["pongClock"].as<bool>();
 
     JsonObject gauges = disp["gauges"];
     if (gauges) {

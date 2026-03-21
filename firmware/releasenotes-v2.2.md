@@ -21,6 +21,14 @@
 - Runs at ~40fps independently of the main display refresh
 - Optional - enable via checkbox in Display settings
 
+## Pong clock (NEW, optional)
+
+- **Breakout-style animated clock** - classic Arcanoid game plays on the clock screen
+- Colored bricks, bouncing ball, auto-tracking paddle
+- On minute change, digits break apart with fragment explosion effects and bounce back
+- Runs at ~50fps independently of the main display refresh
+- Optional - enable via checkbox in Display settings
+
 ## Automatic DST (NEW)
 
 - **Timezone regions** replace the old UTC offset dropdown - select your region (e.g. "Central European (Poland, Germany)") and DST switches automatically

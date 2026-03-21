@@ -17,6 +17,7 @@ struct DisplaySettings {
   uint16_t bgColor;        // background color
   uint16_t trackColor;     // inactive arc track color
   bool     animatedBar;    // shimmer effect on progress bar
+  bool     pongClock;      // Pong/Breakout animated clock
   GaugeColors progress;
   GaugeColors nozzle;
   GaugeColors bed;

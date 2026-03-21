@@ -19,7 +19,7 @@
 // =============================================================================
 //  Color palette (RGB565)
 // =============================================================================
-#define CLR_BG          0x0861   // very dark navy
+#define CLR_BG          0x0000   // black
 #define CLR_CARD        0x1926   // dark card bg
 #define CLR_HEADER      0x10A2   // header bar bg
 #define CLR_TEXT         0xFFFF   // white

@@ -48,6 +48,7 @@ void defaultDisplaySettings(DisplaySettings& ds) {
   ds.bgColor = CLR_BG;
   ds.trackColor = CLR_TRACK;
   ds.animatedBar = false;
+  ds.pongClock = false;
 
   // Progress: green arc, green label, white value
   ds.progress = { CLR_GREEN, CLR_GREEN, CLR_TEXT };
@@ -140,6 +141,7 @@ void loadSettings() {
   dispSettings.bgColor = prefs.getUShort("dsp_bg", def.bgColor);
   dispSettings.trackColor = prefs.getUShort("dsp_trk", def.trackColor);
   dispSettings.animatedBar = prefs.getBool("dsp_abar", def.animatedBar);
+  dispSettings.pongClock = prefs.getBool("dsp_pong", def.pongClock);
 
   loadGaugeColors("gc_prg", dispSettings.progress, def.progress);
   loadGaugeColors("gc_noz", dispSettings.nozzle, def.nozzle);
@@ -235,6 +237,7 @@ void saveSettings() {
   prefs.putUShort("dsp_bg", dispSettings.bgColor);
   prefs.putUShort("dsp_trk", dispSettings.trackColor);
   prefs.putBool("dsp_abar", dispSettings.animatedBar);
+  prefs.putBool("dsp_pong", dispSettings.pongClock);
 
   saveGaugeColors("gc_prg", dispSettings.progress);
   saveGaugeColors("gc_noz", dispSettings.nozzle);

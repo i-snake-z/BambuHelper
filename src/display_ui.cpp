@@ -2,6 +2,7 @@
 #include "display_gauges.h"
 #include "display_anim.h"
 #include "clock_mode.h"
+#include "clock_pong.h"
 #include "icons.h"
 #include "config.h"
 #include "bambu_state.h"
@@ -709,6 +710,10 @@ void updateDisplay() {
     BambuState& sh = displayedPrinter().state;
     tickProgressShimmer(tft, 0, sh.progress, sh.printing);
   }
+  // Pong clock runs at ~50fps, independent of display refresh
+  if (currentScreen == SCREEN_CLOCK && dispSettings.pongClock) {
+    tickPongClock();
+  }
 
   unsigned long now = millis();
   if (now - lastDisplayUpdate < DISPLAY_UPDATE_MS) return;
@@ -720,10 +725,15 @@ void updateDisplay() {
     if (prevScreen == SCREEN_OFF && currentScreen != SCREEN_OFF) {
       setBacklight(brightness);
     }
+    // Reset text size in case Pong clock left it scaled up
+    tft.setTextSize(1);
     tft.fillScreen(currentScreen == SCREEN_OFF ? TFT_BLACK : dispSettings.bgColor);
     forceRedraw = true;
     if (currentScreen == SCREEN_CONNECTING_MQTT) {
       connectScreenStart = millis();
+    }
+    if (currentScreen == SCREEN_CLOCK && dispSettings.pongClock) {
+      resetPongClock();
     }
     prevScreen = currentScreen;
   }
@@ -762,7 +772,8 @@ void updateDisplay() {
       break;
 
     case SCREEN_CLOCK:
-      drawClock();
+      if (!dispSettings.pongClock) drawClock();
+      // Pong clock is ticked before the throttle (above)
       break;
 
     case SCREEN_OFF:
