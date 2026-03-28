@@ -68,16 +68,23 @@ void initWiFi() {
       }
     }
 
-    WiFi.begin(wifiSSID, wifiPass);
     setScreenState(SCREEN_CONNECTING_WIFI);
 
-    Serial.printf("Connecting to WiFi: %s\n", wifiSSID);
+    for (int attempt = 1; attempt <= 3; attempt++) {
+      Serial.printf("Connecting to WiFi: %s (attempt %d/3)\n", wifiSSID, attempt);
+      WiFi.begin(wifiSSID, wifiPass);
 
-    unsigned long start = millis();
-    while (WiFi.status() != WL_CONNECTED &&
-           millis() - start < WIFI_CONNECT_TIMEOUT) {
-      delay(100);
-      updateDisplay();
+      unsigned long start = millis();
+      while (WiFi.status() != WL_CONNECTED &&
+             millis() - start < WIFI_CONNECT_TIMEOUT) {
+        delay(100);
+        updateDisplay();
+      }
+      if (WiFi.status() == WL_CONNECTED) break;
+
+      Serial.println("WiFi attempt failed, retrying...");
+      WiFi.disconnect(true);
+      delay(1000);
     }
 
     if (WiFi.status() == WL_CONNECTED) {
