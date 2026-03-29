@@ -423,6 +423,14 @@ void saveBuzzerSettings() {
 }
 
 void resetSettings() {
+  // Clear sensitive data from RAM before wiping NVS
+  memset(wifiPass, 0, sizeof(wifiPass));
+  memset(cloudEmail, 0, sizeof(cloudEmail));
+  for (int i = 0; i < MAX_PRINTERS; i++) {
+    memset(printers[i].config.accessCode, 0, sizeof(printers[i].config.accessCode));
+    memset(printers[i].config.cloudUserId, 0, sizeof(printers[i].config.cloudUserId));
+  }
+
   prefs.begin(NVS_NAMESPACE, false);
   prefs.clear();
   prefs.end();

@@ -612,6 +612,7 @@ static void reconnectConn(MqttConn& c) {
     }
     MQTT_LOG("[%d] connect(id=%s, user=%s) [CLOUD]...", c.slotIndex, clientId, cfg.cloudUserId);
     connected = c.mqtt->connect(clientId, cfg.cloudUserId, tokenBuf);
+    memset(tokenBuf, 0, sizeof(tokenBuf));
   } else {
     MQTT_LOG("[%d] connect(id=%s, user=%s) [LOCAL]...", c.slotIndex, clientId, BAMBU_USERNAME);
     connected = c.mqtt->connect(clientId, BAMBU_USERNAME, cfg.accessCode);

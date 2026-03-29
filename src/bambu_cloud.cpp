@@ -7,6 +7,9 @@
 #include <ArduinoJson.h>
 #include <mbedtls/base64.h>
 
+// CA certificate bundle (shared with MQTT — linked from platformio build)
+extern const uint8_t rootca_crt_bundle_start[] asm("_binary_x509_crt_bundle_start");
+
 // ---------------------------------------------------------------------------
 //  Region-aware URL helpers
 // ---------------------------------------------------------------------------
@@ -43,27 +46,13 @@ static void setSlicerHeaders(HTTPClient& http) {
   http.addHeader("Accept", "application/json");
 }
 
-// Make an HTTPS request.
+// Make an HTTPS request with a given TLS client.
 // Returns HTTP status code, or -1 on error. Response body in `response`.
-static int httpsRequest(const char* method, const char* url,
-                        const char* body, const char* authToken,
-                        String& response) {
-  WiFiClientSecure* tls = new (std::nothrow) WiFiClientSecure();
-  if (!tls) return -1;
-  // TODO: setInsecure() disables TLS certificate verification. Ideally we'd use
-  // a CA bundle (like esp_crt_bundle_attach) for proper verification, but:
-  // - Bambu Cloud API may use different CDN/CA chains than the MQTT endpoint
-  // - ESP32 RAM is tight and a second CA cert alongside MQTT's would risk OOM
-  // - The CA chain could rotate, breaking connectivity on deployed devices
-  // Risk is limited to MITM on the local network during cloud API calls.
-  tls->setInsecure();
-  tls->setTimeout(10);
-
+static int httpsRequestWith(WiFiClientSecure& tls, const char* method,
+                            const char* url, const char* body,
+                            const char* authToken, String& response) {
   HTTPClient http;
-  if (!http.begin(*tls, url)) {
-    delete tls;
-    return -1;
-  }
+  if (!http.begin(tls, url)) return -1;
 
   setSlicerHeaders(http);
   if (authToken && strlen(authToken) > 0) {
@@ -84,6 +73,31 @@ static int httpsRequest(const char* method, const char* url,
   }
 
   http.end();
+  return httpCode;
+}
+
+// Make an HTTPS request. Tries with CA-verified TLS first; if the
+// connection fails (CA mismatch, chain rotation), retries without
+// verification so deployed devices don't lose cloud connectivity.
+// Returns HTTP status code, or -1 on error. Response body in `response`.
+static int httpsRequest(const char* method, const char* url,
+                        const char* body, const char* authToken,
+                        String& response) {
+  WiFiClientSecure* tls = new (std::nothrow) WiFiClientSecure();
+  if (!tls) return -1;
+  tls->setTimeout(10);
+
+  // First attempt: proper CA verification
+  tls->setCACertBundle(rootca_crt_bundle_start);
+  int httpCode = httpsRequestWith(*tls, method, url, body, authToken, response);
+
+  if (httpCode == -1) {
+    // TLS handshake likely failed — retry without verification
+    Serial.println("CLOUD: TLS verified request failed, retrying without CA check");
+    tls->setInsecure();
+    httpCode = httpsRequestWith(*tls, method, url, body, authToken, response);
+  }
+
   delete tls;
   return httpCode;
 }
