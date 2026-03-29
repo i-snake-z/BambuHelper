@@ -561,6 +561,8 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
           <input type="radio" name="tsm_dm" value="1" %TSM_DM1%> Always show watts
         </label>
       </div>
+      <label for="tsm_slot" style="margin-top:12px">Assigned printer</label>
+      <select id="tsm_slot">%TSM_SLOT_OPTIONS%</select>
       <label for="tsm_pi" style="margin-top:12px">Poll interval</label>
       <select id="tsm_pi">
         <option value="10" %TSM_PI10%>10 seconds</option>
@@ -793,6 +795,7 @@ function savePower(){
   p.append('tsm_ip',document.getElementById('tsm_ip').value.trim());
   var dm=document.querySelector('input[name="tsm_dm"]:checked');
   if(dm) p.append('tsm_dm',dm.value);
+  p.append('tsm_slot',document.getElementById('tsm_slot').value);
   p.append('tsm_pi',document.getElementById('tsm_pi').value);
   fetch('/save/power',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()})
     .then(function(r){return r.json();})
@@ -1196,6 +1199,26 @@ static void processTemplate(String& page) {
   page.replace("%TSM_IP%", tasmotaSettings.ip);
   page.replace("%TSM_DM0%", tasmotaSettings.displayMode == 0 ? "checked" : "");
   page.replace("%TSM_DM1%", tasmotaSettings.displayMode == 1 ? "checked" : "");
+  // Tasmota slot dropdown (dynamic, based on configured printers)
+  {
+    String slotOpts;
+    slotOpts += "<option value=\"255\"";
+    if (tasmotaSettings.assignedSlot == 255) slotOpts += " selected";
+    slotOpts += ">Any printer</option>";
+    for (uint8_t i = 0; i < MAX_ACTIVE_PRINTERS; i++) {
+      if (!isPrinterConfigured(i)) continue;
+      slotOpts += "<option value=\"";
+      slotOpts += String(i);
+      slotOpts += "\"";
+      if (tasmotaSettings.assignedSlot == i) slotOpts += " selected";
+      slotOpts += ">";
+      const char* nm = printers[i].config.name;
+      if (nm[0] != '\0') slotOpts += nm;
+      else { slotOpts += "Printer "; slotOpts += String(i + 1); }
+      slotOpts += "</option>";
+    }
+    page.replace("%TSM_SLOT_OPTIONS%", slotOpts);
+  }
   page.replace("%TSM_PI10%", tasmotaSettings.pollInterval == 10 ? "selected" : "");
   page.replace("%TSM_PI15%", tasmotaSettings.pollInterval == 15 ? "selected" : "");
   page.replace("%TSM_PI20%", tasmotaSettings.pollInterval == 20 ? "selected" : "");
@@ -1586,6 +1609,10 @@ static void handleSavePower() {
     strlcpy(tasmotaSettings.ip, server.arg("tsm_ip").c_str(), sizeof(tasmotaSettings.ip));
   if (server.hasArg("tsm_dm"))
     tasmotaSettings.displayMode = server.arg("tsm_dm").toInt() ? 1 : 0;
+  if (server.hasArg("tsm_slot")) {
+    int slot = server.arg("tsm_slot").toInt();
+    tasmotaSettings.assignedSlot = (slot >= 0 && slot < MAX_ACTIVE_PRINTERS) ? (uint8_t)slot : 255;
+  }
   if (server.hasArg("tsm_pi")) {
     uint8_t pi = server.arg("tsm_pi").toInt();
     if (pi >= 10 && pi <= 30) tasmotaSettings.pollInterval = pi;

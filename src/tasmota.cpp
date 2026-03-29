@@ -101,6 +101,11 @@ bool tasmotaIsOnline() {
   return (millis() - g_lastUpdateMs) < TASMOTA_STALE_MS;
 }
 
+bool tasmotaIsActiveForSlot(uint8_t slot) {
+  if (!tasmotaIsOnline()) return false;
+  return (tasmotaSettings.assignedSlot == 255 || tasmotaSettings.assignedSlot == slot);
+}
+
 void tasmotaMarkPrintStart() {
   g_printStartKwh = g_totalKwh;  // -1 if Tasmota not yet polled
   Serial.printf("[Tasmota] Print start marked, Total=%.3fkWh\n", g_printStartKwh);

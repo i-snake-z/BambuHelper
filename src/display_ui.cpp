@@ -484,7 +484,7 @@ static void drawIdle() {
     idleAltShowPower = false;
     idleAltFlipMs    = 0;
   }
-  bool idleTasmotaOnline = tasmotaIsOnline();
+  bool idleTasmotaOnline = tasmotaIsActiveForSlot(rotState.displayIndex);
 
   int16_t botCY = scrH - 9;
   bool bottomChanged = wifiChanged ||
@@ -1023,7 +1023,7 @@ static void drawPrinting() {
     altShowPower = false;
     altFlipMs    = 0;
   }
-  bool tasmotaOnline = tasmotaIsOnline();
+  bool tasmotaOnline = tasmotaIsActiveForSlot(rotState.displayIndex);
 
   bool showingWifi = !(s.ams.present && s.ams.activeTray < AMS_MAX_TRAYS && s.ams.trays[s.ams.activeTray].present)
                   && !(s.ams.vtPresent && s.ams.activeTray == 254);
@@ -1203,11 +1203,12 @@ static void drawFinished() {
   }
 
   // === kWh used during print (between filename and bottom bar) ===
-  bool kwhChanged = tasmotaSettings.enabled && tasmotaKwhChanged();
+  bool tasmotaActiveHere = tasmotaIsActiveForSlot(rotState.displayIndex);
+  bool kwhChanged = tasmotaActiveHere && tasmotaKwhChanged();
   if (forceRedraw || kwhChanged) {
     int16_t kwhY = (LY_FIN_FILE_Y + eff_finBotY) / 2;
     tft.fillRect(0, kwhY - 9, scrW, 18, CLR_BG);
-    if (tasmotaSettings.enabled) {
+    if (tasmotaActiveHere) {
       float kwh = tasmotaGetPrintKwhUsed();
       if (kwh >= 0.0f) {
         drawIcon16(tft, cx - 32, kwhY - 8, icon_lightning, CLR_YELLOW);

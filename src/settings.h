@@ -73,6 +73,7 @@ struct TasmotaSettings {
   char    ip[16];
   uint8_t displayMode;   // 0=alternate layers/power every 4s, 1=always show power
   uint8_t pollInterval;  // poll interval in seconds (10-30)
+  uint8_t assignedSlot;  // printer slot this plug belongs to (0, 1, ... or 255=any)
 };
 
 extern char wifiSSID[33];

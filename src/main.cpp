@@ -172,7 +172,9 @@ void loop() {
       if (current != SCREEN_PRINTING) {
         setScreenState(SCREEN_PRINTING);
         finishScreenStart = 0;
-        tasmotaMarkPrintStart();
+        if (tasmotaSettings.assignedSlot == 255 ||
+            tasmotaSettings.assignedSlot == rotState.displayIndex)
+          tasmotaMarkPrintStart();
       }
       s.finishBuzzerPlayed = false;  // reset for next finish event
       s.doorAcknowledged = false;    // reset door ack for next finish

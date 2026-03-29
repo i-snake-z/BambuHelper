@@ -17,7 +17,7 @@ char cloudEmail[64] = {0};
 ButtonType buttonType = BTN_DISABLED;
 uint8_t buttonPin = BUTTON_DEFAULT_PIN;
 BuzzerSettings buzzerSettings = { false, BUZZER_DEFAULT_PIN, 0, 0 };
-TasmotaSettings tasmotaSettings = { false, "", 0, 30 };
+TasmotaSettings tasmotaSettings = { false, "", 0, 30, 255 };
 
 static Preferences prefs;
 
@@ -297,6 +297,7 @@ void loadSettings() {
   tasmotaSettings.pollInterval = prefs.getUChar("tsm_pi", 30);
   if (tasmotaSettings.pollInterval < 10 || tasmotaSettings.pollInterval > 30)
     tasmotaSettings.pollInterval = 30;
+  tasmotaSettings.assignedSlot = prefs.getUChar("tsm_slot", 255);
 
   prefs.end();
 }
@@ -359,6 +360,7 @@ void saveSettings() {
   prefs.putString("tsm_ip", tasmotaSettings.ip);
   prefs.putUChar("tsm_dm", tasmotaSettings.displayMode);
   prefs.putUChar("tsm_pi", tasmotaSettings.pollInterval);
+  prefs.putUChar("tsm_slot", tasmotaSettings.assignedSlot);
 
   prefs.end();
 }
