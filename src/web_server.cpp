@@ -244,7 +244,7 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
   <div class="section-content" id="sec-display">
     <div class="section-body">
       <label for="bright">Brightness: <span id="brightVal">%BRIGHT%</span></label>
-      <input type="range" id="bright" min="10" max="255" value="%BRIGHT%"
+      <input type="range" id="bright" min="10" max="255" step="5" value="%BRIGHT%"
              oninput="document.getElementById('brightVal').textContent=this.value;sendBrightness(this.value)">
 
       <div style="margin-top:12px">
@@ -265,7 +265,7 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
           </div>
           <label for="nbright" style="font-size:12px">Night brightness: <span id="nbrightVal">%NBRIGHT%</span></label>
           <input type="range" id="nbright" min="0" max="255" step="5" value="%NBRIGHT%"
-                 oninput="document.getElementById('nbrightVal').textContent=this.value;sendBrightness(this.value)">
+                 oninput="document.getElementById('nbrightVal').textContent=this.value">
           <p style="font-size:11px;color:#8B949E;margin-top:4px">Recommended: 20-50 for night use. Requires NTP time sync.</p>
         </div>
       </div>
@@ -291,7 +291,7 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
       <div id="ssbrightWrap" style="display:%CLOCKDISP%">
         <label for="ssbright" style="margin-top:12px;font-size:12px">Screensaver brightness: <span id="ssbrightVal">%SSBRIGHT%</span></label>
         <input type="range" id="ssbright" min="0" max="255" step="5" value="%SSBRIGHT%"
-               oninput="document.getElementById('ssbrightVal').textContent=this.value;sendBrightness(this.value)">
+               oninput="document.getElementById('ssbrightVal').textContent=this.value">
         <p style="font-size:11px;color:#8B949E;margin-top:4px">Brightness when clock/screensaver is active. Set to 0 to turn off backlight.</p>
       </div>
       <div class="check-row">
