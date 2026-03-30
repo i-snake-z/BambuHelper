@@ -13,10 +13,11 @@
 #include <WebServer.h>
 #include <ArduinoJson.h>
 #include <Update.h>
+#ifdef ENABLE_OTA_AUTO
 #include <HTTPUpdate.h>
 #include <WiFiClientSecure.h>
-
 extern const uint8_t rootca_crt_bundle_start[] asm("_binary_x509_crt_bundle_start");
+#endif
 
 static WebServer server(80);
 
@@ -522,13 +523,15 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
         <p style="font-size:13px;color:#8B949E;margin-bottom:10px">
           Current version: <b style="color:#58A6FF">%FW_VER%</b>
         </p>
+)rawliteral"
+#ifdef ENABLE_OTA_AUTO
+R"rawliteral(
         <div style="display:flex;gap:4px;margin-bottom:12px">
           <button type="button" id="tab-auto-btn" onclick="switchFwTab('auto')"
             style="flex:1;padding:8px;border:1px solid #58A6FF;border-radius:6px;background:#21262D;color:#E6EDF3;font-size:13px;cursor:pointer">Auto Update</button>
           <button type="button" id="tab-manual-btn" onclick="switchFwTab('manual')"
             style="flex:1;padding:8px;border:1px solid #30363D;border-radius:6px;background:#0D1117;color:#8B949E;font-size:13px;cursor:pointer">Manual Upload</button>
         </div>
-        <!-- Auto Update tab -->
         <div id="fw-tab-auto">
           <p style="font-size:12px;color:#8B949E;margin-bottom:10px">
             Check for and install BambuHelper display device firmware updates directly from GitHub.
@@ -557,11 +560,19 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
             </div>
           </div>
         </div>
-        <!-- Manual Upload tab -->
         <div id="fw-tab-manual" style="display:none">
           <p style="font-size:12px;color:#8B949E;margin-bottom:10px">
             Upload a .bin file to update BambuHelper display device firmware. Settings are preserved. Device restarts automatically.
           </p>
+)rawliteral"
+#else
+R"rawliteral(
+          <p style="font-size:12px;color:#8B949E;margin-bottom:10px">
+            Upload a .bin file to update BambuHelper display device firmware. Settings are preserved. Device restarts automatically.
+          </p>
+)rawliteral"
+#endif
+R"rawliteral(
           <input type="file" id="otaFile" accept=".bin"
                  style="width:100%;padding:6px;background:#0D1117;border:1px solid #30363D;border-radius:6px;color:#C9D1D9">
           <div id="otaProgress" style="display:none;margin-top:12px">
@@ -572,7 +583,13 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
           </div>
           <div id="otaStatus" style="margin-top:8px;font-size:13px"></div>
           <button type="button" class="btn btn-primary" style="margin-top:8px" onclick="startOta()">Upload &amp; Update</button>
+)rawliteral"
+#ifdef ENABLE_OTA_AUTO
+R"rawliteral(
         </div>
+)rawliteral"
+#endif
+R"rawliteral(
       </div>
       <div style="margin-top:20px;padding-top:12px;border-top:1px solid #30363D">
         <button type="button" class="btn btn-danger" onclick="if(confirm('Reset all settings to factory defaults?'))location='/reset'">Factory Reset</button>
@@ -1055,6 +1072,9 @@ function startOta(){
   xhr.send(fd);
 }
 
+)rawliteral"
+#ifdef ENABLE_OTA_AUTO
+R"rawliteral(
 var _autoOtaUrl='';
 var _autoOtaProgress=0;
 function switchFwTab(t){
@@ -1191,6 +1211,9 @@ function waitForReboot(){
     });
   },2000);
 }
+)rawliteral"
+#endif // ENABLE_OTA_AUTO
+R"rawliteral(
 
 // Pong depends on afterprint not being "keepon" (no clock when keeping finish screen on)
 function toggleAfterPrint(){
@@ -1951,9 +1974,11 @@ static bool   otaFirstChunk  = false;
 static String otaError       = "";
 
 // Auto-update (device-initiated, HTTPUpdate from GitHub releases)
+#ifdef ENABLE_OTA_AUTO
 static volatile bool otaAutoInProgress = false;
 static volatile int  otaAutoProgress   = 0;
 static String        otaAutoStatus     = "";
+#endif
 
 static void gaugeColorsFromJson(JsonObject obj, GaugeColors& gc) {
   if (obj["arc"].is<const char*>())   gc.arc   = htmlToRgb565(obj["arc"]);
@@ -2107,6 +2132,7 @@ static void handleSettingsImportFinish() {
 // ---------------------------------------------------------------------------
 //  Auto-update: FreeRTOS task that runs HTTPUpdate from a GitHub release URL
 // ---------------------------------------------------------------------------
+#ifdef ENABLE_OTA_AUTO
 static void otaAutoTaskFn(void* param) {
   String* urlPtr = (String*)param;
   String url = *urlPtr;
@@ -2199,6 +2225,7 @@ static void handleOtaStatus() {
   serializeJson(doc, json);
   server.send(200, "application/json", json);
 }
+#endif // ENABLE_OTA_AUTO
 
 static void handleOtaUpload() {
   HTTPUpload& upload = server.upload();
@@ -2317,8 +2344,10 @@ void initWebServer() {
   server.on("/settings/export", HTTP_GET, handleSettingsExport);
   server.on("/settings/import", HTTP_POST, handleSettingsImportFinish, handleSettingsImportUpload);
   server.on("/ota/upload", HTTP_POST, handleOtaFinish, handleOtaUpload);
+#ifdef ENABLE_OTA_AUTO
   server.on("/ota/auto",   HTTP_POST, handleOtaAuto);
   server.on("/ota/status", HTTP_GET,  handleOtaStatus);
+#endif
   server.onNotFound(handleNotFound);
   server.begin();
   Serial.println("Web server started on port 80");

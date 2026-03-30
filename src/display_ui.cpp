@@ -296,6 +296,7 @@ static void drawWiFiConnected() {
 // ---------------------------------------------------------------------------
 //  Screen: OTA firmware update in progress
 // ---------------------------------------------------------------------------
+#ifdef ENABLE_OTA_AUTO
 #include "web_server.h"
 static void drawOtaUpdate() {
   tft.setTextDatum(MC_DATUM);
@@ -334,6 +335,7 @@ static void drawOtaUpdate() {
   tft.setTextColor(CLR_ORANGE, CLR_BG);
   tft.drawString("Do not power off", SCREEN_W / 2, SCREEN_H / 2 + 58);
 }
+#endif // ENABLE_OTA_AUTO
 
 // ---------------------------------------------------------------------------
 //  Screen: Connecting MQTT
@@ -1420,9 +1422,11 @@ void updateDisplay() {
       drawConnectingMQTT();
       break;
 
+#ifdef ENABLE_OTA_AUTO
     case SCREEN_OTA_UPDATE:
       drawOtaUpdate();
       break;
+#endif
 
     case SCREEN_IDLE:
       drawIdle();
