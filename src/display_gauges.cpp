@@ -172,7 +172,8 @@ struct GaugeTextCache {
 static GaugeTextCache gCache[GAUGE_CACHE_SLOTS];
 static uint8_t gCacheCount = 0;
 
-// Find or create cache slot for gauge at (cx, cy)
+// Find or create cache slot for gauge at (cx, cy).
+// If the cache is full, evict the oldest entry (slot 0) to make room.
 static GaugeTextCache* gaugeCache(int16_t cx, int16_t cy) {
   for (uint8_t i = 0; i < gCacheCount; i++) {
     if (gCache[i].cx == cx && gCache[i].cy == cy) return &gCache[i];
@@ -183,7 +184,12 @@ static GaugeTextCache* gaugeCache(int16_t cx, int16_t cy) {
     c->main[0] = '\0'; c->sub[0] = '\0';
     return c;
   }
-  return nullptr;
+  // Cache full: evict oldest slot (index 0), shift remaining entries down
+  memmove(&gCache[0], &gCache[1], (GAUGE_CACHE_SLOTS - 1) * sizeof(GaugeTextCache));
+  GaugeTextCache* c = &gCache[GAUGE_CACHE_SLOTS - 1];
+  c->cx = cx; c->cy = cy;
+  c->main[0] = '\0'; c->sub[0] = '\0';
+  return c;
 }
 
 // Check if text changed; update cache. Returns true if redraw needed.

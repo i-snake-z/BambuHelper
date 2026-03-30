@@ -26,6 +26,14 @@ String getAPSSID() {
   return apSSID;
 }
 
+static void stopAP() {
+  if (dnsServer) {
+    dnsServer->stop();
+    delete dnsServer;
+    dnsServer = nullptr;
+  }
+}
+
 static void startAP() {
   // Build SSID from MAC
   uint32_t mac = (uint32_t)(ESP.getEfuseMac() & 0xFFFF);
@@ -90,6 +98,7 @@ void initWiFi() {
     if (WiFi.status() == WL_CONNECTED) {
       Serial.printf("WiFi connected! IP: %s\n",
                     WiFi.localIP().toString().c_str());
+      stopAP();
       apMode = false;
       disconnectTime = 0;
 

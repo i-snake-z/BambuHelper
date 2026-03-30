@@ -52,7 +52,7 @@ static int httpsRequestWith(WiFiClientSecure& tls, const char* method,
                             const char* url, const char* body,
                             const char* authToken, String& response) {
   HTTPClient http;
-  if (!http.begin(tls, url)) return -1;
+  if (!http.begin(tls, url)) { http.end(); return -1; }
 
   setSlicerHeaders(http);
   if (authToken && strlen(authToken) > 0) {

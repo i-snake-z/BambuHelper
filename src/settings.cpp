@@ -25,6 +25,7 @@ static Preferences prefs;
 //  RGB565 <-> HTML hex conversion
 // ---------------------------------------------------------------------------
 uint16_t htmlToRgb565(const char* hex) {
+  if (!hex || hex[0] == '\0') return 0;
   // Skip '#' if present
   if (hex[0] == '#') hex++;
   uint32_t rgb = strtoul(hex, nullptr, 16);

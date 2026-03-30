@@ -267,7 +267,8 @@ static void parseMqttPayload(byte* payload, unsigned int length,
       while (v < payloadEnd && (*v == ' ' || *v == '\n' || *v == '\r' || *v == '\t')) v++;
       if (v < payloadEnd && *v == '{') { amsObj = v; break; }
       search = f + 6;
-      rem = length - (search - (const char*)payload);
+      size_t consumed = (size_t)(search - (const char*)payload);
+      rem = (consumed < length) ? (length - consumed) : 0;
     }
 
     if (amsObj) {

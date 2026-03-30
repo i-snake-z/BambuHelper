@@ -41,14 +41,18 @@ extern TFT_eSPI tft;
 #define ARK_MAX_FRAGS     20
 #define ARK_TIME_OVERRIDE_MS 60000
 
-// Brick colors per row (classic Arcanoid rainbow)
-static const uint16_t brickColors[ARK_BRICK_ROWS] = {
+// Brick colors per row (classic Arcanoid rainbow).
+// BRICK_COLOR_COUNT is the authoritative size; ARK_BRICK_ROWS must not exceed it.
+#define BRICK_COLOR_COUNT 5
+static const uint16_t brickColors[BRICK_COLOR_COUNT] = {
   0xF800,  // Red
   0xFD20,  // Orange
   0xFFE0,  // Yellow
   0x07E0,  // Green
   0x001F,  // Blue
 };
+static_assert(ARK_BRICK_ROWS <= BRICK_COLOR_COUNT,
+              "ARK_BRICK_ROWS exceeds brickColors array size");
 
 // ========== Fragment struct ==========
 struct PongFragment {
@@ -322,7 +326,7 @@ static void updateFragments() {
       frags[i].active = false;
       continue;
     }
-    tft.fillRect((int)frags[i].x, (int)frags[i].y, 3, 3, brickColors[random(0, ARK_BRICK_ROWS)]);
+    tft.fillRect((int)frags[i].x, (int)frags[i].y, 3, 3, brickColors[random(0, BRICK_COLOR_COUNT)]);
   }
   if (fragTimer == 0) {
     for (int i = 0; i < ARK_MAX_FRAGS; i++) {
