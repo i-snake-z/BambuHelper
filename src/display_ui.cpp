@@ -294,6 +294,48 @@ static void drawWiFiConnected() {
 }
 
 // ---------------------------------------------------------------------------
+//  Screen: OTA firmware update in progress
+// ---------------------------------------------------------------------------
+#include "web_server.h"
+static void drawOtaUpdate() {
+  tft.setTextDatum(MC_DATUM);
+  tft.setTextColor(CLR_TEXT, CLR_BG);
+
+  // Title
+  tft.setTextFont(4);
+  tft.drawString("Updating", SCREEN_W / 2, SCREEN_H / 2 - 60);
+  tft.setTextFont(2);
+  tft.setTextColor(CLR_TEXT_DIM, CLR_BG);
+  tft.drawString("BambuHelper firmware", SCREEN_W / 2, SCREEN_H / 2 - 36);
+
+  // Progress bar
+  int pct = getOtaAutoProgress();
+  const int16_t barX = 20, barY = SCREEN_H / 2 - 10;
+  const int16_t barW = SCREEN_W - 40, barH = 14;
+  tft.fillRoundRect(barX, barY, barW, barH, 4, CLR_TRACK);
+  if (pct > 0) {
+    int16_t fill = (int16_t)((pct / 100.0f) * barW);
+    tft.fillRoundRect(barX, barY, fill, barH, 4, CLR_GREEN);
+  }
+
+  // Percentage
+  char pctBuf[8];
+  snprintf(pctBuf, sizeof(pctBuf), "%d%%", pct);
+  tft.setTextFont(2);
+  tft.setTextColor(CLR_TEXT, CLR_BG);
+  tft.drawString(pctBuf, SCREEN_W / 2, SCREEN_H / 2 + 14);
+
+  // Status
+  tft.setTextFont(2);
+  tft.setTextColor(CLR_TEXT_DIM, CLR_BG);
+  tft.drawString(getOtaAutoStatus(), SCREEN_W / 2, SCREEN_H / 2 + 34);
+
+  // Warning
+  tft.setTextColor(CLR_ORANGE, CLR_BG);
+  tft.drawString("Do not power off", SCREEN_W / 2, SCREEN_H / 2 + 58);
+}
+
+// ---------------------------------------------------------------------------
 //  Screen: Connecting MQTT
 // ---------------------------------------------------------------------------
 static void drawConnectingMQTT() {
@@ -1376,6 +1418,10 @@ void updateDisplay() {
 
     case SCREEN_CONNECTING_MQTT:
       drawConnectingMQTT();
+      break;
+
+    case SCREEN_OTA_UPDATE:
+      drawOtaUpdate();
       break;
 
     case SCREEN_IDLE:

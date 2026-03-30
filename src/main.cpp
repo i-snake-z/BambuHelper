@@ -163,6 +163,8 @@ void loop() {
         setScreenState(SCREEN_IDLE);
         finishActive = false;
       }
+    } else if (isOtaAutoInProgress()) {
+      if (current != SCREEN_OTA_UPDATE) setScreenState(SCREEN_OTA_UPDATE);
     } else if (!s.connected && current != SCREEN_CONNECTING_MQTT &&
                current != SCREEN_OFF && current != SCREEN_CLOCK) {
       setScreenState(SCREEN_CONNECTING_MQTT);

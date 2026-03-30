@@ -6,6 +6,12 @@
 // =============================================================================
 #define FW_VERSION          "v2.5Beta1"
 
+// Board variant — injected into the web UI for OTA asset filtering.
+// Normally set via build_flags in platformio.ini; this is a fallback.
+#ifndef BOARD_VARIANT
+#define BOARD_VARIANT       "esp32s3"
+#endif
+
 // =============================================================================
 //  Display
 // =============================================================================

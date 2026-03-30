@@ -13,6 +13,10 @@
 #include <WebServer.h>
 #include <ArduinoJson.h>
 #include <Update.h>
+#include <HTTPUpdate.h>
+#include <WiFiClientSecure.h>
+
+extern const uint8_t rootca_crt_bundle_start[] asm("_binary_x509_crt_bundle_start");
 
 static WebServer server(80);
 
@@ -514,37 +518,61 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
         </div>
       </div>
       <div style="margin-top:20px;padding-top:12px;border-top:1px solid #30363D">
-        <h3 style="color:#58A6FF;font-size:14px;margin-bottom:10px">Firmware Update</h3>
-        <p style="font-size:13px;color:#8B949E;margin-bottom:4px">
+        <h3 style="color:#58A6FF;font-size:14px;margin-bottom:6px">Firmware Update</h3>
+        <p style="font-size:13px;color:#8B949E;margin-bottom:10px">
           Current version: <b style="color:#58A6FF">%FW_VER%</b>
         </p>
-        <div id="updateCheck" style="margin-bottom:12px">
-          <button type="button" class="btn btn-blue" onclick="checkForUpdates()">Check for Updates</button>
-          <span id="updateResult" style="margin-left:8px;font-size:13px"></span>
+        <div style="display:flex;gap:4px;margin-bottom:12px">
+          <button type="button" id="tab-auto-btn" onclick="switchFwTab('auto')"
+            style="flex:1;padding:8px;border:1px solid #58A6FF;border-radius:6px;background:#21262D;color:#E6EDF3;font-size:13px;cursor:pointer">Auto Update</button>
+          <button type="button" id="tab-manual-btn" onclick="switchFwTab('manual')"
+            style="flex:1;padding:8px;border:1px solid #30363D;border-radius:6px;background:#0D1117;color:#8B949E;font-size:13px;cursor:pointer">Manual Upload</button>
         </div>
-        <div id="updateInfo" style="display:none;margin-bottom:12px;padding:10px;background:#0D1117;border:1px solid #30363D;border-radius:6px">
-          <div style="display:flex;align-items:center;justify-content:space-between">
-            <div>
-              <b id="updateVer" style="color:#3FB950;font-size:14px"></b>
-              <span id="updateDate" style="color:#8B949E;font-size:12px;margin-left:8px"></span>
+        <!-- Auto Update tab -->
+        <div id="fw-tab-auto">
+          <p style="font-size:12px;color:#8B949E;margin-bottom:10px">
+            Check for and install BambuHelper display device firmware updates directly from GitHub.
+          </p>
+          <div id="updateCheck" style="margin-bottom:12px">
+            <button type="button" class="btn btn-blue" onclick="checkForUpdates()">Check for Updates</button>
+            <span id="updateResult" style="margin-left:8px;font-size:13px"></span>
+          </div>
+          <div id="updateInfo" style="display:none;margin-bottom:12px;padding:10px;background:#0D1117;border:1px solid #30363D;border-radius:6px">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+              <div>
+                <b id="updateVer" style="color:#3FB950;font-size:14px"></b>
+                <span id="updateDate" style="color:#8B949E;font-size:12px;margin-left:8px"></span>
+              </div>
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                <button id="installBtn" type="button" class="btn btn-primary" style="font-size:12px;padding:4px 12px" onclick="installUpdate()">Install on BambuHelper</button>
+                <a id="updateLink" href="#" target="_blank" class="btn" style="font-size:12px;padding:4px 12px;text-decoration:none;background:#21262D;color:#C9D1D9;border:1px solid #30363D;border-radius:6px">Manual download</a>
+              </div>
             </div>
-            <a id="updateLink" href="#" target="_blank" class="btn btn-primary" style="font-size:12px;padding:4px 12px;text-decoration:none">Download .bin</a>
+            <div id="autoOtaWrap" style="display:none;margin-top:10px">
+              <div style="background:#30363D;border-radius:4px;height:16px;overflow:hidden">
+                <div id="autoOtaBar" style="background:#238636;height:100%;width:0%;transition:width 0.4s;border-radius:4px"></div>
+              </div>
+              <div id="autoOtaStatus" style="text-align:center;font-size:12px;color:#8B949E;margin-top:4px">Starting...</div>
+              <p style="font-size:11px;color:#F0883E;margin-top:6px;text-align:center">&#9888; Do not power off or close this page</p>
+            </div>
           </div>
-          <p id="updateNotes" style="color:#C9D1D9;font-size:12px;margin-top:8px;white-space:pre-line"></p>
         </div>
-        <p style="font-size:11px;color:#8B949E;margin-bottom:10px">
-          Upload a .bin file. Settings are preserved. Device restarts automatically.
-        </p>
-        <input type="file" id="otaFile" accept=".bin"
-               style="width:100%;padding:6px;background:#0D1117;border:1px solid #30363D;border-radius:6px;color:#C9D1D9">
-        <div id="otaProgress" style="display:none;margin-top:12px">
-          <div style="background:#30363D;border-radius:4px;height:20px;overflow:hidden">
-            <div id="otaBar" style="background:#238636;height:100%;width:0%;transition:width 0.3s;border-radius:4px"></div>
+        <!-- Manual Upload tab -->
+        <div id="fw-tab-manual" style="display:none">
+          <p style="font-size:12px;color:#8B949E;margin-bottom:10px">
+            Upload a .bin file to update BambuHelper display device firmware. Settings are preserved. Device restarts automatically.
+          </p>
+          <input type="file" id="otaFile" accept=".bin"
+                 style="width:100%;padding:6px;background:#0D1117;border:1px solid #30363D;border-radius:6px;color:#C9D1D9">
+          <div id="otaProgress" style="display:none;margin-top:12px">
+            <div style="background:#30363D;border-radius:4px;height:20px;overflow:hidden">
+              <div id="otaBar" style="background:#238636;height:100%;width:0%;transition:width 0.3s;border-radius:4px"></div>
+            </div>
+            <div id="otaPct" style="text-align:center;font-size:13px;color:#E6EDF3;margin-top:4px">0%</div>
           </div>
-          <div id="otaPct" style="text-align:center;font-size:13px;color:#E6EDF3;margin-top:4px">0%</div>
+          <div id="otaStatus" style="margin-top:8px;font-size:13px"></div>
+          <button type="button" class="btn btn-primary" style="margin-top:8px" onclick="startOta()">Upload &amp; Update</button>
         </div>
-        <div id="otaStatus" style="margin-top:8px;font-size:13px"></div>
-        <button type="button" class="btn btn-primary" style="margin-top:8px" onclick="startOta()">Upload &amp; Update</button>
       </div>
       <div style="margin-top:20px;padding-top:12px;border-top:1px solid #30363D">
         <button type="button" class="btn btn-danger" onclick="if(confirm('Reset all settings to factory defaults?'))location='/reset'">Factory Reset</button>
@@ -1027,11 +1055,21 @@ function startOta(){
   xhr.send(fd);
 }
 
+var _autoOtaUrl='';
+var _autoOtaProgress=0;
+function switchFwTab(t){
+  document.getElementById('fw-tab-auto').style.display=t==='auto'?'block':'none';
+  document.getElementById('fw-tab-manual').style.display=t==='manual'?'block':'none';
+  var a=document.getElementById('tab-auto-btn'),m=document.getElementById('tab-manual-btn');
+  if(t==='auto'){a.style.borderColor='#58A6FF';a.style.background='#21262D';a.style.color='#E6EDF3';m.style.borderColor='#30363D';m.style.background='#0D1117';m.style.color='#8B949E';}
+  else{m.style.borderColor='#58A6FF';m.style.background='#21262D';m.style.color='#E6EDF3';a.style.borderColor='#30363D';a.style.background='#0D1117';a.style.color='#8B949E';}
+}
 function checkForUpdates(){
   var res=document.getElementById('updateResult');
   var info=document.getElementById('updateInfo');
   res.style.color='#58A6FF';res.textContent='Checking...';
   info.style.display='none';
+  _autoOtaUrl='';
   fetch('https://api.github.com/repos/Keralots/BambuHelper/releases/latest')
     .then(function(r){
       if(!r.ok) throw new Error('GitHub API returned '+r.status);
@@ -1044,29 +1082,29 @@ function checkForUpdates(){
         res.style.color='#3FB950';res.textContent='You are up to date ('+current+')';
         return;
       }
-      // Find OTA binary in assets
+      // Find the OTA binary for this board variant.
+      // Expected filename: BambuHelper-<board>-<version>-ota.bin
+      // e.g. BambuHelper-esp32s3-v2.5-ota.bin
+      var board='%BOARD%';
       var otaBin=null;
       for(var i=0;i<d.assets.length;i++){
-        if(d.assets[i].name.indexOf('OTA')!==-1 && d.assets[i].name.endsWith('.bin')){
-          otaBin=d.assets[i];break;
-        }
-      }
-      if(!otaBin){
-        // Fallback: any .bin asset
-        for(var i=0;i<d.assets.length;i++){
-          if(d.assets[i].name.endsWith('.bin')){otaBin=d.assets[i];break;}
-        }
+        var n=d.assets[i].name;
+        if(n.indexOf(board)!==-1&&n.indexOf('-ota.')!==-1&&n.endsWith('.bin')){otaBin=d.assets[i];break;}
       }
       res.style.color='#F0883E';res.textContent='Update available!';
       document.getElementById('updateVer').textContent=latest;
       var pub=new Date(d.published_at);
       document.getElementById('updateDate').textContent=pub.toLocaleDateString();
-      document.getElementById('updateNotes').textContent=d.body?d.body.substring(0,300):'';
+      var installBtn=document.getElementById('installBtn');
+      var link=document.getElementById('updateLink');
       if(otaBin){
-        var link=document.getElementById('updateLink');
+        _autoOtaUrl=otaBin.browser_download_url;
         link.href=otaBin.browser_download_url;
-        link.textContent='Download '+otaBin.name;
         link.style.display='inline-block';
+        installBtn.style.display='inline-block';
+      } else {
+        installBtn.style.display='none';
+        link.style.display='none';
       }
       info.style.display='block';
     })
@@ -1074,6 +1112,84 @@ function checkForUpdates(){
       res.style.color='#F85149';res.textContent='Check failed: '+e.message;
       console.warn('updateCheck:',e);
     });
+}
+function installUpdate(){
+  if(!_autoOtaUrl){return;}
+  var btn=document.getElementById('installBtn');
+  btn.disabled=true;btn.textContent='Installing...';
+  document.getElementById('autoOtaWrap').style.display='block';
+  document.getElementById('autoOtaBar').style.width='0%';
+  document.getElementById('autoOtaBar').style.background='#238636';
+  document.getElementById('autoOtaStatus').style.color='#8B949E';
+  document.getElementById('autoOtaStatus').textContent='Starting...';
+  _autoOtaProgress=0;
+  var p=new URLSearchParams();p.append('url',_autoOtaUrl);
+  fetch('/ota/auto',{method:'POST',body:p})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.error){throw new Error(d.error);}
+      pollOtaStatus();
+    })
+    .catch(function(e){
+      document.getElementById('autoOtaStatus').style.color='#F85149';
+      document.getElementById('autoOtaStatus').textContent='Error: '+e.message;
+      btn.disabled=false;btn.textContent='Install on BambuHelper';
+    });
+}
+var _otaPoller=null;
+function pollOtaStatus(){
+  _otaPoller=setInterval(function(){
+    fetch('/ota/status').then(function(r){return r.json();}).then(function(d){
+      var bar=document.getElementById('autoOtaBar');
+      var st=document.getElementById('autoOtaStatus');
+      _autoOtaProgress=d.progress||0;
+      bar.style.width=d.progress+'%';
+      if(d.status==='done'){
+        clearInterval(_otaPoller);_otaPoller=null;
+        bar.style.width='100%';bar.style.background='#3FB950';
+        st.style.color='#3FB950';st.textContent='Done! Restarting device...';
+        waitForReboot();
+      } else if(d.status&&d.status.indexOf('failed')===0){
+        clearInterval(_otaPoller);_otaPoller=null;
+        st.style.color='#F85149';st.textContent=d.status;
+        var btn=document.getElementById('installBtn');
+        btn.disabled=false;btn.textContent='Retry';
+      } else {
+        st.textContent=d.status+' ('+d.progress+'%)';
+      }
+    }).catch(function(){
+      // Device went offline or /ota/status no longer exists (rebooted to new firmware).
+      // If download reached 100%, the update succeeded — start reload detection.
+      if(_autoOtaProgress>=100){
+        clearInterval(_otaPoller);_otaPoller=null;
+        var bar=document.getElementById('autoOtaBar');
+        var st=document.getElementById('autoOtaStatus');
+        bar.style.width='100%';bar.style.background='#3FB950';
+        st.style.color='#3FB950';st.textContent='Done! Restarting device...';
+        waitForReboot();
+      }
+    });
+  },1000);
+}
+function waitForReboot(){
+  var st=document.getElementById('autoOtaStatus');
+  st.textContent='Waiting for device to restart...';
+  var wentOffline=false,tries=0;
+  var check=setInterval(function(){
+    fetch('/').then(function(){
+      if(wentOffline){
+        // Device is back online after going offline — reload to new firmware
+        clearInterval(check);
+        location.reload();
+      }
+      // else: device hasn't rebooted yet, keep waiting
+    }).catch(function(){
+      wentOffline=true;  // device went offline — reboot is in progress
+      tries++;
+      st.textContent='Restarting... ('+tries+'s)';
+      if(tries>60){clearInterval(check);st.textContent='Reboot timeout — please refresh manually.';}
+    });
+  },2000);
 }
 
 // Pong depends on afterprint not being "keepon" (no clock when keeping finish screen on)
@@ -1236,6 +1352,7 @@ static void processTemplate(String& page) {
 
   page.replace("%DBGLOG%", mqttDebugLog ? "checked" : "");
   page.replace("%FW_VER%", FW_VERSION);
+  page.replace("%BOARD%", BOARD_VARIANT);
 
   if (st.connected) {
     page.replace("%STATUS_CLASS%", "status status-ok");
@@ -1833,6 +1950,11 @@ static bool   otaInProgress  = false;
 static bool   otaFirstChunk  = false;
 static String otaError       = "";
 
+// Auto-update (device-initiated, HTTPUpdate from GitHub releases)
+static volatile bool otaAutoInProgress = false;
+static volatile int  otaAutoProgress   = 0;
+static String        otaAutoStatus     = "";
+
 static void gaugeColorsFromJson(JsonObject obj, GaugeColors& gc) {
   if (obj["arc"].is<const char*>())   gc.arc   = htmlToRgb565(obj["arc"]);
   if (obj["label"].is<const char*>()) gc.label = htmlToRgb565(obj["label"]);
@@ -1982,6 +2104,102 @@ static void handleSettingsImportFinish() {
 // ---------------------------------------------------------------------------
 //  OTA firmware update
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+//  Auto-update: FreeRTOS task that runs HTTPUpdate from a GitHub release URL
+// ---------------------------------------------------------------------------
+static void otaAutoTaskFn(void* param) {
+  String* urlPtr = (String*)param;
+  String url = *urlPtr;
+  delete urlPtr;
+
+  otaAutoStatus = "downloading";
+
+  WiFiClientSecure client;
+  client.setCACertBundle(rootca_crt_bundle_start);
+
+  httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
+  httpUpdate.onProgress([](int cur, int total) {
+    if (total > 0) otaAutoProgress = (int)((cur / (float)total) * 100);
+  });
+
+  t_httpUpdate_return ret = httpUpdate.update(client, url);
+
+  switch (ret) {
+    case HTTP_UPDATE_OK:
+      otaAutoProgress = 100;
+      otaAutoStatus = "done";
+      Serial.println("OTA auto: success, restarting in 4s");
+      delay(4000);   // long enough for JS poller to detect "done" before reboot
+      ESP.restart();
+      break;
+    case HTTP_UPDATE_NO_UPDATES:
+      otaAutoStatus = "already_current";
+      break;
+    case HTTP_UPDATE_FAILED:
+    default: {
+      String err = httpUpdate.getLastErrorString();
+      Serial.printf("OTA auto: failed (%d) %s\n", httpUpdate.getLastError(), err.c_str());
+      // Retry once with setInsecure() in case CA bundle fails
+      if (httpUpdate.getLastError() != -107) {  // -107 = firmware too large, don't retry
+        client.setInsecure();
+        ret = httpUpdate.update(client, url);
+        if (ret == HTTP_UPDATE_OK) {
+          otaAutoProgress = 100;
+          otaAutoStatus = "done";
+          delay(4000);
+          ESP.restart();
+          break;
+        }
+      }
+      otaAutoStatus = "failed: " + err;
+      break;
+    }
+  }
+
+  otaAutoInProgress = false;
+  vTaskDelete(nullptr);
+}
+
+static void handleOtaAuto() {
+  if (otaAutoInProgress) {
+    server.send(409, "application/json", "{\"error\":\"Update already in progress\"}");
+    return;
+  }
+
+  String url = server.arg("url");
+  if (url.length() == 0 ||
+      (!url.startsWith("https://github.com/") &&
+       !url.startsWith("https://objects.githubusercontent.com/"))) {
+    server.send(400, "application/json", "{\"error\":\"Missing or invalid url\"}");
+    return;
+  }
+
+  disconnectBambuMqtt();
+
+  otaAutoInProgress = true;
+  otaAutoProgress   = 0;
+  otaAutoStatus     = "starting";
+
+  String* urlHeap = new String(url);
+  xTaskCreate(otaAutoTaskFn, "otaAuto", 8192, (void*)urlHeap, 5, nullptr);
+
+  server.send(200, "application/json", "{\"status\":\"started\"}");
+}
+
+bool        isOtaAutoInProgress() { return otaAutoInProgress; }
+int         getOtaAutoProgress()  { return otaAutoProgress; }
+const char* getOtaAutoStatus()    { return otaAutoStatus.c_str(); }
+
+static void handleOtaStatus() {
+  JsonDocument doc;
+  doc["inProgress"] = (bool)otaAutoInProgress;
+  doc["progress"]   = (int)otaAutoProgress;
+  doc["status"]     = otaAutoStatus;
+  String json;
+  serializeJson(doc, json);
+  server.send(200, "application/json", json);
+}
+
 static void handleOtaUpload() {
   HTTPUpload& upload = server.upload();
 
@@ -2099,6 +2317,8 @@ void initWebServer() {
   server.on("/settings/export", HTTP_GET, handleSettingsExport);
   server.on("/settings/import", HTTP_POST, handleSettingsImportFinish, handleSettingsImportUpload);
   server.on("/ota/upload", HTTP_POST, handleOtaFinish, handleOtaUpload);
+  server.on("/ota/auto",   HTTP_POST, handleOtaAuto);
+  server.on("/ota/status", HTTP_GET,  handleOtaStatus);
   server.onNotFound(handleNotFound);
   server.begin();
   Serial.println("Web server started on port 80");
