@@ -99,7 +99,8 @@ struct RotationState {
 extern RotationState rotState;
 
 inline PrinterSlot& displayedPrinter() {
-  return printers[rotState.displayIndex];
+  uint8_t idx = rotState.displayIndex < MAX_PRINTERS ? rotState.displayIndex : 0;
+  return printers[idx];
 }
 
 #endif // BAMBU_STATE_H

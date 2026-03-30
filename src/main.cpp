@@ -12,7 +12,9 @@
 
 static unsigned long splashEnd = 0;
 static unsigned long finishScreenStart = 0;
+static bool finishActive = false;          // guards finishScreenStart against millis() wrap
 static unsigned long idleClockStart = 0;  // when all printers became idle
+static bool idleClockActive = false;      // guards idleClockStart against millis() wrap
 static char prevGcodeState[MAX_ACTIVE_PRINTERS][16] = {{0}};
 
 // ---------------------------------------------------------------------------
@@ -133,8 +135,8 @@ void loop() {
       if (cur == SCREEN_OFF || cur == SCREEN_CLOCK) {
         // Wake from sleep + reset backoff for immediate reconnect
         setBacklight(getEffectiveBrightness());
-        finishScreenStart = 0;
-        idleClockStart = 0;
+        finishActive = false;
+        idleClockActive = false;
         resetMqttBackoff();
         setScreenState(SCREEN_IDLE);  // state machine will correct on next loop
       } else if (getActiveConnCount() >= 2) {
@@ -146,7 +148,7 @@ void loop() {
             rotState.displayIndex = next;
             triggerDisplayTransition();
             rotState.lastRotateMs = millis();  // reset auto-rotate timer
-            finishScreenStart = 0;
+            finishActive = false;
             break;
           }
         }
@@ -160,18 +162,18 @@ void loop() {
     if (!isAnyPrinterConfigured()) {
       if (current != SCREEN_IDLE && current != SCREEN_OFF) {
         setScreenState(SCREEN_IDLE);
-        finishScreenStart = 0;
+        finishActive = false;
       }
     } else if (!s.connected && current != SCREEN_CONNECTING_MQTT &&
                current != SCREEN_OFF && current != SCREEN_CLOCK) {
       setScreenState(SCREEN_CONNECTING_MQTT);
-      finishScreenStart = 0;
+      finishActive = false;
     } else if (!s.connected && (current == SCREEN_OFF || current == SCREEN_CLOCK)) {
       // Stay off/clock when printer is disconnected/off
     } else if (s.connected && s.printing) {
       if (current != SCREEN_PRINTING) {
         setScreenState(SCREEN_PRINTING);
-        finishScreenStart = 0;
+        finishActive = false;
         if (tasmotaSettings.assignedSlot == 255 ||
             tasmotaSettings.assignedSlot == rotState.displayIndex)
           tasmotaMarkPrintStart();
@@ -183,6 +185,7 @@ void loop() {
       if (current != SCREEN_FINISHED && current != SCREEN_OFF && current != SCREEN_CLOCK) {
         setScreenState(SCREEN_FINISHED);
         finishScreenStart = millis();
+        finishActive = true;
         if (!s.finishBuzzerPlayed) {
           buzzerPlay(BUZZ_PRINT_FINISHED);
           s.finishBuzzerPlayed = true;
@@ -195,13 +198,14 @@ void loop() {
       if (waitingForDoor && s.doorOpen) {
         s.doorAcknowledged = true;
         finishScreenStart = millis();  // restart timeout from door open moment
+        finishActive = true;
         Serial.println("Door opened - print removal acknowledged, starting timeout");
       }
 
       // Transition from finish screen to clock/off
       // If door ack is enabled and door not yet opened, block the transition
       if (current == SCREEN_FINISHED && !dpSettings.keepDisplayOn &&
-          !waitingForDoor && finishScreenStart > 0) {
+          !waitingForDoor && finishActive) {
         // finishDisplayMins==0: go to clock immediately if enabled, otherwise stay on finish
         // finishDisplayMins>0: wait for timeout before transitioning
         bool timeoutReached = (dpSettings.finishDisplayMins > 0) &&
@@ -235,8 +239,8 @@ void loop() {
       } else if (current != SCREEN_IDLE) {
         if (current == SCREEN_CONNECTING_MQTT) buzzerPlay(BUZZ_CONNECTED);
         setScreenState(SCREEN_IDLE);
-        finishScreenStart = 0;
-        idleClockStart = 0;
+        finishActive = false;
+        idleClockActive = false;
       }
     }
   }
@@ -256,7 +260,7 @@ void loop() {
       }
     }
     if (!anyBusy) {
-      if (idleClockStart == 0) idleClockStart = millis();
+      if (!idleClockActive) { idleClockStart = millis(); idleClockActive = true; }
       if (millis() - idleClockStart > (unsigned long)dpSettings.finishDisplayMins * 60000UL) {
         if (dpSettings.showClockAfterFinish || buttonType == BTN_DISABLED) {
           setScreenState(SCREEN_CLOCK);
@@ -265,10 +269,10 @@ void loop() {
         }
       }
     } else {
-      idleClockStart = 0;
+      idleClockActive = false;
     }
   } else if (cur != SCREEN_IDLE && cur != SCREEN_CONNECTING_MQTT) {
-    idleClockStart = 0;
+    idleClockActive = false;
   }
 
   // Check for error state transition on any printer

@@ -652,7 +652,9 @@ function selectPrinterTab(slot){
     btn.style.background=(i===slot)?'#238636':'#0D1117';
     btn.style.color=(i===slot)?'#fff':'#8B949E';
   });
+  var reqSlot=slot;
   fetch('/printer/config?slot='+slot).then(function(r){return r.json();}).then(function(d){
+    if(reqSlot!==currentSlot)return;
     document.getElementById('connmode').value=d.mode;
     document.getElementById('pname').value=d.name||'';
     document.getElementById('ip').value=d.ip||'';
