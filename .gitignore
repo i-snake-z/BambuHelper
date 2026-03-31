@@ -6,6 +6,6 @@
 *.obj
 *.elf
 *.bin
-!firmware/**/*.bin
+firmware/
 *.map
 tools/pushall_dump.json
