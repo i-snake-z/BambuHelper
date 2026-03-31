@@ -1192,8 +1192,8 @@ function pollOtaStatus(){
       }
     }).catch(function(){
       // Device went offline or /ota/status no longer exists (rebooted to new firmware).
-      // If download reached 100%, the update succeeded — start reload detection.
-      if(_autoOtaProgress>=100){
+      // If download reached >=90%, treat as success — HTTPUpdate doesn't guarantee a 100% tick.
+      if(_autoOtaProgress>=90){
         clearInterval(_otaPoller);_otaPoller=null;
         var bar=document.getElementById('autoOtaBar');
         var st=document.getElementById('autoOtaStatus');
