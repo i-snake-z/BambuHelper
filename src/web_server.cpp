@@ -22,6 +22,15 @@ extern const uint8_t rootca_crt_bundle_start[] asm("_binary_x509_crt_bundle_star
 static WebServer server(80);
 
 // ---------------------------------------------------------------------------
+//  Deferred restart — avoids blocking delay() before ESP.restart()
+// ---------------------------------------------------------------------------
+static unsigned long pendingRestartAt = 0;
+
+static void scheduleRestart(unsigned long delayMs = 1000) {
+  pendingRestartAt = millis() + delayMs;
+}
+
+// ---------------------------------------------------------------------------
 //  AP-mode page (minimal WiFi setup only)
 // ---------------------------------------------------------------------------
 static const char PAGE_AP_HTML[] PROGMEM = R"rawliteral(
@@ -1643,8 +1652,7 @@ static void handleSaveWifi() {
   saveSettings();
 
   server.send(200, "application/json", "{\"status\":\"ok\"}");
-  delay(1000);
-  ESP.restart();
+  scheduleRestart();
 }
 
 // Live brightness preview (no save, just PWM update)
@@ -1708,8 +1716,7 @@ static void handleReset() {
     "<html><body style='background:#0D1117;color:#E6EDF3;text-align:center;padding-top:80px;font-family:sans-serif'>"
     "<h2 style='color:#F85149'>Factory Reset</h2>"
     "<p>Restarting...</p></body></html>");
-  delay(1000);
-  resetSettings();
+  resetSettings();  // clears NVS and calls ESP.restart()
 }
 
 static void handleDebug() {
@@ -1844,8 +1851,14 @@ static void handleSaveRotation() {
     uint8_t bp = server.arg("buzpin").toInt();
     if (bp > 0 && bp <= 48) buzzerSettings.pin = bp;
   }
-  if (server.hasArg("buzqs")) buzzerSettings.quietStartHour = server.arg("buzqs").toInt();
-  if (server.hasArg("buzqe")) buzzerSettings.quietEndHour = server.arg("buzqe").toInt();
+  if (server.hasArg("buzqs")) {
+    int qs = server.arg("buzqs").toInt();
+    if (qs >= 0 && qs <= 23) buzzerSettings.quietStartHour = qs;
+  }
+  if (server.hasArg("buzqe")) {
+    int qe = server.arg("buzqe").toInt();
+    if (qe >= 0 && qe <= 23) buzzerSettings.quietEndHour = qe;
+  }
   saveBuzzerSettings();
   initBuzzer();
 
@@ -2121,8 +2134,14 @@ static void handleSettingsImportFinish() {
   if (buz) {
     if (buz["enabled"].is<bool>())    buzzerSettings.enabled = buz["enabled"].as<bool>();
     if (buz["pin"].is<uint8_t>())     buzzerSettings.pin = buz["pin"].as<uint8_t>();
-    if (buz["quietStart"].is<uint8_t>()) buzzerSettings.quietStartHour = buz["quietStart"].as<uint8_t>();
-    if (buz["quietEnd"].is<uint8_t>())   buzzerSettings.quietEndHour = buz["quietEnd"].as<uint8_t>();
+    if (buz["quietStart"].is<uint8_t>()) {
+      uint8_t qs = buz["quietStart"].as<uint8_t>();
+      if (qs <= 23) buzzerSettings.quietStartHour = qs;
+    }
+    if (buz["quietEnd"].is<uint8_t>()) {
+      uint8_t qe = buz["quietEnd"].as<uint8_t>();
+      if (qe <= 23) buzzerSettings.quietEndHour = qe;
+    }
   }
 
   // Save everything to NVS
@@ -2132,8 +2151,7 @@ static void handleSettingsImportFinish() {
   saveBuzzerSettings();
 
   server.send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Settings imported. Restarting...\"}");
-  delay(1000);
-  ESP.restart();
+  scheduleRestart();
 }
 
 // ---------------------------------------------------------------------------
@@ -2164,9 +2182,8 @@ static void otaAutoTaskFn(void* param) {
     case HTTP_UPDATE_OK:
       otaAutoProgress = 100;
       otaAutoStatus = "done";
-      Serial.println("OTA auto: success, restarting in 4s");
-      delay(4000);   // long enough for JS poller to detect "done" before reboot
-      ESP.restart();
+      Serial.println("OTA auto: success, scheduling restart");
+      scheduleRestart(4000);  // let JS poller detect "done" before reboot
       break;
     case HTTP_UPDATE_NO_UPDATES:
       otaAutoStatus = "already_current";
@@ -2182,8 +2199,7 @@ static void otaAutoTaskFn(void* param) {
         if (ret == HTTP_UPDATE_OK) {
           otaAutoProgress = 100;
           otaAutoStatus = "done";
-          delay(4000);
-          ESP.restart();
+          scheduleRestart(4000);
           break;
         }
       }
@@ -2301,8 +2317,7 @@ static void handleOtaFinish() {
   }
   server.send(200, "application/json",
     "{\"status\":\"ok\",\"message\":\"Update successful. Restarting...\"}");
-  delay(1500);
-  ESP.restart();
+  scheduleRestart(1500);
 }
 
 // Captive portal: redirect any unknown request to root
@@ -2365,4 +2380,8 @@ void initWebServer() {
 
 void handleWebServer() {
   server.handleClient();
+  if (pendingRestartAt && millis() >= pendingRestartAt) {
+    Serial.println("Deferred restart triggered");
+    ESP.restart();
+  }
 }
