@@ -13,6 +13,7 @@
 #include <WebServer.h>
 #include <ArduinoJson.h>
 #include <Update.h>
+#include "esp_ota_ops.h"
 #ifdef ENABLE_OTA_AUTO
 #include <HTTPUpdate.h>
 #include <WiFiClientSecure.h>
@@ -2251,10 +2252,28 @@ static void handleOtaUpload() {
 
     disconnectBambuMqtt();
 
-    if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
-      otaError = Update.errorString();
+    const esp_partition_t* partition = esp_ota_get_next_update_partition(NULL);
+    if (!partition) {
+      otaError = "No OTA partition found";
+      Serial.println("OTA: no OTA partition found");
+      otaInProgress = false;
+      return;
+    }
+    Serial.printf("OTA: firmware upload started, partition size: %u bytes\n", partition->size);
+
+    if (!Update.begin(partition->size)) {
+      otaError = "OTA begin failed: " + String(Update.errorString());
       Serial.printf("OTA: begin failed: %s\n", otaError.c_str());
       otaInProgress = false;
+      return;
+    }
+
+    if (server.hasHeader("X-MD5")) {
+      String md5 = server.header("X-MD5");
+      if (md5.length() == 32) {
+        Update.setMD5(md5.c_str());
+        Serial.printf("OTA: MD5 checksum set: %s\n", md5.c_str());
+      }
     }
 
   } else if (upload.status == UPLOAD_FILE_WRITE) {
@@ -2362,6 +2381,8 @@ void initWebServer() {
   server.on("/ota/status", HTTP_GET,  handleOtaStatus);
 #endif
   server.onNotFound(handleNotFound);
+  const char* otaHeaders[] = {"X-MD5"};
+  server.collectHeaders(otaHeaders, 1);
   server.begin();
   Serial.println("Web server started on port 80");
 }
