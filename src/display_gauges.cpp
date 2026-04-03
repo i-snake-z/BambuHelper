@@ -327,62 +327,34 @@ void drawTempGauge(TFT_eSPI& tft, int16_t cx, int16_t cy, int16_t radius,
 }
 
 // ---------------------------------------------------------------------------
-//  ETA widget — no arc ring, full slot height available, text only.
-//  < 60 min : Font 6 number (digits only) + Font 2 "min" label
-//  ≥ 60 min : Font 4 "1h" + Font 4 "23m" (letters need Font 4)
-//  idle     : Font 4 "--"
+//  ETA widget — no arc ring, text only. Format: "HH:MM" (same Font 4 as clock).
 // ---------------------------------------------------------------------------
 void drawEtaWidget(TFT_eSPI& tft, int16_t cx, int16_t cy, int16_t radius,
                    uint16_t remainingMin, bool printing, bool forceRedraw) {
   uint16_t bg = dispSettings.bgColor;
   const int16_t thickness = 6;
 
-  // Build strings for change-detection (same logic as before)
-  char line1[8], line2[8];
+  char line1[8];
   if (!printing) {
-    strlcpy(line1, "--", sizeof(line1));
-    line2[0] = '\0';
-  } else if (remainingMin >= 60) {
-    snprintf(line1, sizeof(line1), "%dh", remainingMin / 60);
-    snprintf(line2, sizeof(line2), "%dm", remainingMin % 60);
+    strlcpy(line1, "--:--", sizeof(line1));
   } else {
-    snprintf(line1, sizeof(line1), "%d", remainingMin);
-    strlcpy(line2, "min", sizeof(line2));
+    snprintf(line1, sizeof(line1), "%02d:%02d", remainingMin / 60, remainingMin % 60);
   }
 
-  if (!gaugeTextChanged(cx, cy, line1, line2, forceRedraw)) return;
+  if (!gaugeTextChanged(cx, cy, line1, "", forceRedraw)) return;
 
-  // Clear the full slot area
+  // Clear only what we actually draw — same safe bounds as clock widget
   const int16_t halfW = radius + thickness + 2;
   const int16_t topY  = cy - radius - thickness - 2;
-  const int16_t botY  = cy + radius + 26;
+  const int16_t botY  = cy + radius + 6;
   tft.fillRect(cx - halfW, topY, halfW * 2, botY - topY, bg);
 
   tft.setTextDatum(MC_DATUM);
+  tft.setTextFont(4);
+  tft.setTextColor(printing ? dispSettings.eta.value : dispSettings.eta.label);
+  tft.drawString(line1, cx, cy - 4);
 
-  if (!printing) {
-    // Idle: "--" centred in slot
-    tft.setTextFont(4);
-    tft.setTextColor(dispSettings.eta.label);
-    tft.drawString("--", cx, cy - 4);
-  } else if (remainingMin >= 60) {
-    // ≥ 60 min: "1h" / "23m" both Font 4 (letters need Font 4)
-    tft.setTextFont(4);
-    tft.setTextColor(dispSettings.eta.value);
-    tft.drawString(line1, cx, cy - 12);
-    tft.setTextColor(dispSettings.eta.label);
-    tft.drawString(line2, cx, cy + 8);
-  } else {
-    // < 60 min: large Font 6 number + Font 2 "min" below
-    tft.setTextFont(6);
-    tft.setTextColor(dispSettings.eta.value);
-    tft.drawString(line1, cx, cy - 14);
-    tft.setTextFont(2);
-    tft.setTextColor(dispSettings.eta.label);
-    tft.drawString("min", cx, cy + 22);
-  }
-
-  // Label at same Y as every other gauge — safely inside the slot boundary
+  // Label
   tft.setTextFont(1);
   tft.setTextColor(dispSettings.eta.label, bg);
   tft.drawString("To finish", cx, cy + radius - 1);
@@ -404,7 +376,7 @@ void drawClockWidget(TFT_eSPI& tft, int16_t cx, int16_t cy, int16_t radius,
   const int16_t thickness = 6;
   const int16_t halfW = radius + thickness + 2;
   const int16_t topY  = cy - radius - thickness - 2;
-  const int16_t botY  = cy + radius + 26;
+  const int16_t botY  = cy + radius + 6;  // tight: label bottom ~cy+radius+3
   tft.fillRect(cx - halfW, topY, halfW * 2, botY - topY, bg);
 
   char timeBuf[8];
