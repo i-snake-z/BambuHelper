@@ -309,11 +309,14 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
         <input type="range" id="ssbright" min="0" max="255" step="5" value="%SSBRIGHT%"
                oninput="document.getElementById('ssbrightVal').textContent=this.value">
         <p style="font-size:11px;color:#8B949E;margin-top:4px">Brightness when clock/screensaver is active. Set to 0 to turn off backlight.</p>
-        <div class="check-row" id="pong-row">
-          <input type="checkbox" id="pong" value="1" %PONG% onchange="toggleSetting('pong',this.checked)">
-          <label for="pong">Breakout clock (animated game as screensaver)</label>
-        </div>
-        <p style="font-size:11px;color:#8B949E;margin-top:4px">Without a physical button, clock is always shown instead of turning display off.</p>
+        <label for="scrsvr" style="margin-top:10px">Screensaver</label>
+        <select id="scrsvr" onchange="toggleAfterPrint()">
+          <option value="none" %SCRSVR_NONE%>Clock (digital, no animation)</option>
+          <option value="pong" %SCRSVR_PONG%>Breakout clock (animated game)</option>
+          <option value="snake" %SCRSVR_SNAKE%>Snake clock (auto-playing Snake)</option>
+          <option value="pacman" %SCRSVR_PACMAN%>Pac-Man clock (auto-playing Pac-Man)</option>
+        </select>
+
       </div>
 
       <div style="margin-top:16px;padding-top:12px;border-top:1px solid #30363D">
@@ -408,6 +411,45 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
           <label>Label</label><input type="color" id="cfn_l" value="%CFN_L%">
           <label>Value</label><input type="color" id="cfn_v" value="%CFN_V%">
         </div></div>
+        <div class="gauge-section"><h3>Clock</h3><div class="color-row">
+          <label>Time</label><input type="color" id="clk_a" value="%CLK_A%">
+          <label>Date</label><input type="color" id="clk_l" value="%CLK_L%">
+          <label>AM/PM</label><input type="color" id="clk_v" value="%CLK_V%">
+        </div></div>
+        <div class="gauge-section"><h3>Time Remaining</h3><div class="color-row">
+          <label>Number</label><input type="color" id="eta_v" value="%ETA_V%">
+          <label>Label</label><input type="color" id="eta_l" value="%ETA_L%">
+        </div></div>
+      </div>
+
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid #30363D">
+        <h3 style="color:#58A6FF;font-size:14px;margin-bottom:4px">Gauge Layout</h3>
+        <p style="font-size:12px;color:#8B949E;margin-bottom:10px">Choose which widget goes in each of the 6 display positions. Set any slot to <em>Empty</em> to hide it.</p>
+        <style>
+          .slot-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px}
+          .slot-grid label{color:#8B949E;font-size:11px;margin:0 0 2px}
+          .slot-grid select{padding:5px 4px;font-size:12px;width:100%;border:1px solid #30363D;border-radius:4px;background:#0D1117;color:#E6EDF3}
+          .slot-row-label{font-size:11px;color:#58A6FF;margin:6px 0 2px;grid-column:1/-1}
+        </style>
+        <div class="slot-grid">
+          <div class="slot-row-label">&#9650; Top row</div>
+          <div><label>Top-left</label>
+            <select id="slot0"><option value="0">&#8212; Empty &#8212;</option><option value="1">Progress</option><option value="2">Nozzle Temp</option><option value="3">Bed Temp</option><option value="4">Part Fan</option><option value="5">Aux Fan</option><option value="6">Chamber Fan</option><option value="7">Time Remaining</option><option value="8">Clock</option></select></div>
+          <div><label>Top-center</label>
+            <select id="slot1"><option value="0">&#8212; Empty &#8212;</option><option value="1">Progress</option><option value="2">Nozzle Temp</option><option value="3">Bed Temp</option><option value="4">Part Fan</option><option value="5">Aux Fan</option><option value="6">Chamber Fan</option><option value="7">Time Remaining</option><option value="8">Clock</option></select></div>
+          <div><label>Top-right</label>
+            <select id="slot2"><option value="0">&#8212; Empty &#8212;</option><option value="1">Progress</option><option value="2">Nozzle Temp</option><option value="3">Bed Temp</option><option value="4">Part Fan</option><option value="5">Aux Fan</option><option value="6">Chamber Fan</option><option value="7">Time Remaining</option><option value="8">Clock</option></select></div>
+          <div class="slot-row-label">&#9660; Bottom row</div>
+          <div><label>Bot-left</label>
+            <select id="slot3"><option value="0">&#8212; Empty &#8212;</option><option value="1">Progress</option><option value="2">Nozzle Temp</option><option value="3">Bed Temp</option><option value="4">Part Fan</option><option value="5">Aux Fan</option><option value="6">Chamber Fan</option><option value="7">Time Remaining</option><option value="8">Clock</option></select></div>
+          <div><label>Bot-center</label>
+            <select id="slot4"><option value="0">&#8212; Empty &#8212;</option><option value="1">Progress</option><option value="2">Nozzle Temp</option><option value="3">Bed Temp</option><option value="4">Part Fan</option><option value="5">Aux Fan</option><option value="6">Chamber Fan</option><option value="7">Time Remaining</option><option value="8">Clock</option></select></div>
+          <div><label>Bot-right</label>
+            <select id="slot5"><option value="0">&#8212; Empty &#8212;</option><option value="1">Progress</option><option value="2">Nozzle Temp</option><option value="3">Bed Temp</option><option value="4">Part Fan</option><option value="5">Aux Fan</option><option value="6">Chamber Fan</option><option value="7">Time Remaining</option><option value="8">Clock</option></select></div>
+        </div>
+        <script>
+          (function(){var sv=[%SLOT0%,%SLOT1%,%SLOT2%,%SLOT3%,%SLOT4%,%SLOT5%];for(var i=0;i<6;i++){var el=document.getElementById('slot'+i);if(el)el.value=sv[i];}})();
+        </script>
       </div>
 
       <button type="button" class="btn btn-blue" onclick="applyDisplay()">Apply Display Settings</button>
@@ -446,6 +488,11 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
           <input type="number" id="btnpin" min="1" max="48" value="%BTN_PIN%">
           <p style="font-size:11px;color:#8B949E;margin-top:4px">Button switches between printers. Wakes display from sleep.</p>
         </div>
+        <div class="check-row" style="margin-top:10px">
+          <input type="checkbox" id="btnCycleClock" %BTN_CYCLE_CLOCK%>
+          <label for="btnCycleClock">Include clock in button cycle</label>
+        </div>
+        <p style="font-size:11px;color:#8B949E;margin-top:4px">When enabled: Printer 1 &rarr; Printer 2 &rarr; Clock &rarr; Printer 1 &rarr; ...</p>
       </div>
 
       <div style="margin-top:16px;padding-top:12px;border-top:1px solid #30363D">
@@ -850,6 +897,7 @@ function saveRotation(){
   p.append('rotinterval',document.getElementById('rotinterval').value);
   p.append('btntype',document.getElementById('btntype').value);
   p.append('btnpin',document.getElementById('btnpin').value);
+  if(document.getElementById('btnCycleClock').checked) p.append('btnCycleClock','1');
   p.append('buzzen',document.getElementById('buzzen').value);
   p.append('buzpin',document.getElementById('buzpin').value);
   p.append('buzqs',document.getElementById('buzqs').value);
@@ -927,18 +975,24 @@ function applyDisplay(){
   else{p.append('fmins',ap);p.append('clock','1');}
   if(document.getElementById('dack').checked) p.append('dack','1');
   if(document.getElementById('abar').checked) p.append('abar','1');
-  if(document.getElementById('pong').checked) p.append('pong','1');
+  p.append('scrsvr',document.getElementById('scrsvr').value);
   if(document.getElementById('slbl').checked) p.append('slbl','1');
   p.append('tz',document.getElementById('tz').value);
   if(document.getElementById('use24h').checked) p.append('use24h','1');
   p.append('datefmt',document.getElementById('datefmt').value);
   p.append('clr_bg',document.getElementById('clr_bg').value);
   p.append('clr_track',document.getElementById('clr_track').value);
-  var g=['prg','noz','bed','pfn','afn','cfn'];
+  var g=['prg','noz','bed','pfn','afn','cfn','clk'];
   for(var i=0;i<g.length;i++){
     p.append(g[i]+'_a',document.getElementById(g[i]+'_a').value);
     p.append(g[i]+'_l',document.getElementById(g[i]+'_l').value);
     p.append(g[i]+'_v',document.getElementById(g[i]+'_v').value);
+  }
+  p.append('eta_l',document.getElementById('eta_l').value);
+  p.append('eta_v',document.getElementById('eta_v').value);
+  for(var si=0;si<6;si++){
+    var sel=document.getElementById('slot'+si);
+    if(sel) p.append('slot'+si,sel.value);
   }
   fetch('/apply',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()}).then(function(r){
     if(r.ok) showToast('Applied!'); else showToast('Error');
@@ -1239,15 +1293,14 @@ function waitForReboot(){
 #endif // ENABLE_OTA_AUTO
 R"rawliteral(
 
-// Pong depends on afterprint not being "keepon" (no clock when keeping finish screen on)
+// Screensaver dropdown depends on afterprint not being "keepon"
 function toggleAfterPrint(){
   var v=document.getElementById('afterprint').value;
   document.getElementById('customMinsWrap').style.display=(v==='custom')?'block':'none';
-  var pong=document.getElementById('pong');
-  var row=document.getElementById('pong-row');
+  var sel=document.getElementById('scrsvr');
   var showClock=(v!=='keepon');
-  pong.disabled=!showClock;
-  row.style.opacity=showClock?'1':'0.4';
+  sel.disabled=!showClock;
+  sel.style.opacity=showClock?'1':'0.4';
 }
 toggleAfterPrint();
 </script>
@@ -1377,8 +1430,18 @@ static void processTemplate(String& page) {
   }
   page.replace("%DACK%", dpSettings.doorAckEnabled ? "checked" : "");
   page.replace("%ABAR%", dispSettings.animatedBar ? "checked" : "");
-  page.replace("%PONG%", dispSettings.pongClock ? "checked" : "");
+  page.replace("%SCRSVR_NONE%",  (!dispSettings.pongClock && !dispSettings.snakeClock && !dispSettings.pacmanClock) ? "selected" : "");
+  page.replace("%SCRSVR_PONG%",  dispSettings.pongClock  ? "selected" : "");
+  page.replace("%SCRSVR_SNAKE%", dispSettings.snakeClock ? "selected" : "");
+  page.replace("%SCRSVR_PACMAN%", dispSettings.pacmanClock ? "selected" : "");
   page.replace("%SLBL%", dispSettings.smallLabels ? "checked" : "");
+
+  // Gauge layout slot values (injected as JS array for the selects)
+  for (int i = 0; i < GAUGE_SLOT_COUNT; i++) {
+    String key = "%SLOT"; key += i; key += "%";
+    page.replace(key, String(dispSettings.gaugeSlots[i]));
+  }
+
 #if defined(DISPLAY_CYD)
   {
     String row = "<div class=\"check-row\">"
@@ -1407,6 +1470,8 @@ static void processTemplate(String& page) {
   replaceGaugeColors(page, "PFN", dispSettings.partFan);
   replaceGaugeColors(page, "AFN", dispSettings.auxFan);
   replaceGaugeColors(page, "CFN", dispSettings.chamberFan);
+  replaceGaugeColors(page, "CLK", dispSettings.clock);
+  replaceGaugeColors(page, "ETA", dispSettings.eta);
 
   page.replace("%DBGLOG%", mqttDebugLog ? "checked" : "");
   page.replace("%FW_VER%", FW_VERSION);
@@ -1435,6 +1500,7 @@ static void processTemplate(String& page) {
   page.replace("%BTN_TOUCH%", buttonType == BTN_TOUCH ? "selected" : "");
   page.replace("%BTN_SCREEN%", buttonType == BTN_TOUCHSCREEN ? "selected" : "");
   page.replace("%BTN_PIN%", String(buttonPin));
+  page.replace("%BTN_CYCLE_CLOCK%", btnCycleClock ? "checked" : "");
 
   // Buzzer settings
   page.replace("%BUZ_OFF%", buzzerSettings.enabled ? "" : "selected");
@@ -1528,6 +1594,17 @@ static void readDisplayFromForm() {
   readGaugeColorsFromForm("pfn", dispSettings.partFan);
   readGaugeColorsFromForm("afn", dispSettings.auxFan);
   readGaugeColorsFromForm("cfn", dispSettings.chamberFan);
+  readGaugeColorsFromForm("clk", dispSettings.clock);
+  readGaugeColorsFromForm("eta", dispSettings.eta);
+
+  // Gauge layout slots
+  for (int i = 0; i < GAUGE_SLOT_COUNT; i++) {
+    String key = "slot"; key += i;
+    if (server.hasArg(key)) {
+      uint8_t v = (uint8_t)server.arg(key).toInt();
+      if (v < GAUGE_TYPE_COUNT) dispSettings.gaugeSlots[i] = v;
+    }
+  }
 
   if (server.hasArg("fmins")) {
     dpSettings.finishDisplayMins = server.arg("fmins").toInt();
@@ -1536,7 +1613,12 @@ static void readDisplayFromForm() {
   dpSettings.showClockAfterFinish = server.hasArg("clock");
   dpSettings.doorAckEnabled = server.hasArg("dack");
   dispSettings.animatedBar = server.hasArg("abar");
-  dispSettings.pongClock = server.hasArg("pong");
+  {
+    String sv = server.arg("scrsvr");
+    dispSettings.pongClock   = (sv == "pong");
+    dispSettings.snakeClock  = (sv == "snake");
+    dispSettings.pacmanClock = (sv == "pacman");
+  }
   dispSettings.smallLabels = server.hasArg("slbl");
   if (server.hasArg("cydextra")) {
     uint8_t mode = server.arg("cydextra").toInt();
@@ -1782,7 +1864,6 @@ static void handleToggleSetting() {
   else if (key == "clock")   dpSettings.showClockAfterFinish = on;
   else if (key == "dack")    dpSettings.doorAckEnabled = on;
   else if (key == "abar")    dispSettings.animatedBar = on;
-  else if (key == "pong")    dispSettings.pongClock = on;
   else if (key == "slbl")    dispSettings.smallLabels = on;
   else if (key == "invcol")  dispSettings.invertColors = on;
   else if (key == "nighten") dpSettings.nightModeEnabled = on;
@@ -1857,6 +1938,7 @@ static void handleSaveRotation() {
     uint8_t bp = server.arg("btnpin").toInt();
     if (bp > 0 && bp <= 48) buttonPin = bp;
   }
+  btnCycleClock = server.hasArg("btnCycleClock");
   saveButtonSettings();
   initButton();
 
@@ -1947,7 +2029,12 @@ static void handleSettingsExport() {
   rgb565ToHtml(dispSettings.trackColor, buf); disp["trackColor"] = String(buf);
   disp["animatedBar"] = dispSettings.animatedBar;
   disp["pongClock"] = dispSettings.pongClock;
+  disp["snakeClock"] = dispSettings.snakeClock;
+  disp["pacmanClock"] = dispSettings.pacmanClock;
   disp["smallLabels"] = dispSettings.smallLabels;
+
+  JsonArray slots = disp["gaugeSlots"].to<JsonArray>();
+  for (int i = 0; i < GAUGE_SLOT_COUNT; i++) slots.add(dispSettings.gaugeSlots[i]);
 
   JsonObject gauges = disp["gauges"].to<JsonObject>();
   JsonObject gPrg = gauges["progress"].to<JsonObject>(); gaugeColorsToJson(gPrg, dispSettings.progress);
@@ -1956,6 +2043,7 @@ static void handleSettingsExport() {
   JsonObject gPfn = gauges["partFan"].to<JsonObject>();  gaugeColorsToJson(gPfn, dispSettings.partFan);
   JsonObject gAfn = gauges["auxFan"].to<JsonObject>();   gaugeColorsToJson(gAfn, dispSettings.auxFan);
   JsonObject gCfn = gauges["chamberFan"].to<JsonObject>(); gaugeColorsToJson(gCfn, dispSettings.chamberFan);
+  JsonObject gEta = gauges["eta"].to<JsonObject>();        gaugeColorsToJson(gEta, dispSettings.eta);
 
   // Display power
   JsonObject dp = doc["displayPower"].to<JsonObject>();
@@ -2083,8 +2171,18 @@ static void handleSettingsImportFinish() {
     if (disp["bgColor"].is<const char*>())    dispSettings.bgColor = htmlToRgb565(disp["bgColor"]);
     if (disp["trackColor"].is<const char*>()) dispSettings.trackColor = htmlToRgb565(disp["trackColor"]);
     if (disp["animatedBar"].is<bool>())       dispSettings.animatedBar = disp["animatedBar"].as<bool>();
-    if (disp["pongClock"].is<bool>())         dispSettings.pongClock = disp["pongClock"].as<bool>();
+    if (disp["pongClock"].is<bool>())        dispSettings.pongClock  = disp["pongClock"].as<bool>();
+    if (disp["snakeClock"].is<bool>())       dispSettings.snakeClock = disp["snakeClock"].as<bool>();
+    if (disp["pacmanClock"].is<bool>())      dispSettings.pacmanClock = disp["pacmanClock"].as<bool>();
     if (disp["smallLabels"].is<bool>())      dispSettings.smallLabels = disp["smallLabels"].as<bool>();
+
+    if (disp["gaugeSlots"].is<JsonArray>()) {
+      JsonArray slotArr = disp["gaugeSlots"].as<JsonArray>();
+      for (int i = 0; i < GAUGE_SLOT_COUNT && i < (int)slotArr.size(); i++) {
+        uint8_t v = slotArr[i].as<uint8_t>();
+        if (v < GAUGE_TYPE_COUNT) dispSettings.gaugeSlots[i] = v;
+      }
+    }
 
     JsonObject gauges = disp["gauges"];
     if (gauges) {
@@ -2094,6 +2192,7 @@ static void handleSettingsImportFinish() {
       if (gauges["partFan"].is<JsonObject>())  { JsonObject g = gauges["partFan"];  gaugeColorsFromJson(g, dispSettings.partFan); }
       if (gauges["auxFan"].is<JsonObject>())   { JsonObject g = gauges["auxFan"];   gaugeColorsFromJson(g, dispSettings.auxFan); }
       if (gauges["chamberFan"].is<JsonObject>()){ JsonObject g = gauges["chamberFan"]; gaugeColorsFromJson(g, dispSettings.chamberFan); }
+      if (gauges["eta"].is<JsonObject>())        { JsonObject g = gauges["eta"];        gaugeColorsFromJson(g, dispSettings.eta); }
     }
   }
 

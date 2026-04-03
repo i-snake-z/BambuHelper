@@ -32,6 +32,12 @@ void drawFanGauge(TFT_eSPI& tft, int16_t cx, int16_t cy, int16_t radius,
                   bool forceRedraw, const GaugeColors* colors = nullptr,
                   float arcPercent = -1.0f);
 
+// Draw ETA widget — text-only, fills the same slot space as arc gauges
+void drawEtaWidget(TFT_eSPI& tft, int16_t cx, int16_t cy, int16_t radius,
+                   uint16_t remainingMin, bool printing, bool forceRedraw);
+void drawClockWidget(TFT_eSPI& tft, int16_t cx, int16_t cy, int16_t radius,
+                     bool forceRedraw);
+
 // Reset cached text (call on screen/printer transitions)
 void resetGaugeTextCache();
 

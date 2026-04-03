@@ -11,10 +11,33 @@
   #include "display_ui.h"  // extern tft for getTouch()
 #endif
 
-static bool lastRaw = false;
-static bool stableState = false;
-static unsigned long lastChangeMs = 0;
-static const unsigned long DEBOUNCE_MS = 50;
+// --- Shared debounced state (updated once per loop via pollButton) ---
+static bool lastRaw      = false;
+static bool stableState  = false;
+static unsigned long lastChangeMs  = 0;
+static bool shortPressFired = false;  // edge flag, consumed by wasButtonPressed()
+
+static const unsigned long DEBOUNCE_MS   = 50;
+
+static bool readRaw() {
+  if (buttonType == BTN_TOUCHSCREEN) {
+#if defined(USE_XPT2046)
+    if (!touchReady) return false;
+    return ts.touched();
+#elif defined(TOUCH_CS)
+    uint16_t tx, ty;
+    return tft.getTouch(&tx, &ty);
+#else
+    return false;
+#endif
+  } else if (buttonType == BTN_PUSH) {
+    if (buttonPin == 0) return false;
+    return (digitalRead(buttonPin) == LOW);   // active LOW with pull-up
+  } else {  // BTN_TOUCH
+    if (buttonPin == 0) return false;
+    return (digitalRead(buttonPin) == HIGH);  // TTP223: active HIGH
+  }
+}
 
 void initButton() {
   if (buttonType == BTN_DISABLED) return;
@@ -39,41 +62,35 @@ void initButton() {
   lastChangeMs = 0;
 }
 
-bool wasButtonPressed() {
-  if (buttonType == BTN_DISABLED) return false;
+// Must be called once per main loop tick to update shared state.
+void pollButton() {
+  if (buttonType == BTN_DISABLED) return;
 
-  bool raw;
-  if (buttonType == BTN_TOUCHSCREEN) {
-#if defined(USE_XPT2046)
-    if (!touchReady) return false;
-    raw = ts.touched();
-#elif defined(TOUCH_CS)
-    uint16_t tx, ty;
-    raw = tft.getTouch(&tx, &ty);
-#else
-    return false;
-#endif
-  } else if (buttonType == BTN_PUSH) {
-    if (buttonPin == 0) return false;
-    raw = (digitalRead(buttonPin) == LOW);   // active LOW with pull-up
-  } else {
-    if (buttonPin == 0) return false;
-    raw = (digitalRead(buttonPin) == HIGH);  // TTP223: active HIGH
-  }
+  bool raw = readRaw();
 
-  // Debounce
+  // Debounce: track when raw state changes
   if (raw != lastRaw) {
     lastChangeMs = millis();
     lastRaw = raw;
   }
-  if ((millis() - lastChangeMs) < DEBOUNCE_MS) return false;
 
-  // Rising edge detection
-  bool result = false;
-  if (raw && !stableState) {
-    result = true;
-  }
+  // Only act on stable (debounced) state
+  if ((millis() - lastChangeMs) < DEBOUNCE_MS) return;
+
+  bool prevStable = stableState;
   stableState = raw;
 
-  return result;
+  // Rising edge → short press
+  if (raw && !prevStable) {
+    shortPressFired = true;
+  }
 }
+
+// Returns true once per rising edge (short tap).
+bool wasButtonPressed() {
+  if (!shortPressFired) return false;
+  shortPressFired = false;
+  return true;
+}
+
+

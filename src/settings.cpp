@@ -16,6 +16,7 @@ DisplayPowerSettings dpSettings;
 char cloudEmail[64] = {0};
 ButtonType buttonType = BTN_DISABLED;
 uint8_t buttonPin = BUTTON_DEFAULT_PIN;
+bool btnCycleClock = false;
 BuzzerSettings buzzerSettings = { false, BUZZER_DEFAULT_PIN, 0, 0 };
 TasmotaSettings tasmotaSettings = { false, "", 0, 30, 255 };
 
@@ -106,6 +107,8 @@ void defaultDisplaySettings(DisplaySettings& ds) {
   ds.trackColor = CLR_TRACK;
   ds.animatedBar = true;
   ds.pongClock = false;
+  ds.snakeClock = false;
+  ds.pacmanClock = false;
   ds.smallLabels = false;
   ds.invertColors = false;
   ds.cydExtraMode = 0;
@@ -122,6 +125,18 @@ void defaultDisplaySettings(DisplaySettings& ds) {
   ds.auxFan = { CLR_ORANGE, CLR_ORANGE, CLR_TEXT };
   // Chamber fan: green arc, green label, white value
   ds.chamberFan = { CLR_GREEN, CLR_GREEN, CLR_TEXT };
+  // Clock: white time, dim date, white am/pm
+  ds.clock = { CLR_TEXT, CLR_TEXT_DIM, CLR_TEXT };
+  // ETA widget: green number, dim label
+  ds.eta = { CLR_GREEN, CLR_TEXT_DIM, CLR_GREEN };
+
+  // Default gauge layout: Progress | Nozzle | Bed / Part Fan | Aux Fan | Chamber Fan
+  ds.gaugeSlots[0] = GAUGE_PROGRESS;
+  ds.gaugeSlots[1] = GAUGE_NOZZLE;
+  ds.gaugeSlots[2] = GAUGE_BED;
+  ds.gaugeSlots[3] = GAUGE_PART_FAN;
+  ds.gaugeSlots[4] = GAUGE_AUX_FAN;
+  ds.gaugeSlots[5] = GAUGE_CHAMBER_FAN;
 }
 
 // ---------------------------------------------------------------------------
@@ -204,6 +219,8 @@ void loadSettings() {
   dispSettings.trackColor = prefs.getUShort("dsp_trk", def.trackColor);
   dispSettings.animatedBar = prefs.getBool("dsp_abar", def.animatedBar);
   dispSettings.pongClock = prefs.getBool("dsp_pong", def.pongClock);
+  dispSettings.snakeClock = prefs.getBool("dsp_snake", def.snakeClock);
+  dispSettings.pacmanClock = prefs.getBool("dsp_pac", def.pacmanClock);
   dispSettings.smallLabels = prefs.getBool("dsp_slbl", def.smallLabels);
   dispSettings.invertColors = prefs.getBool("dsp_inv", def.invertColors);
   dispSettings.cydExtraMode = prefs.getUChar("dsp_cydex", 0);
@@ -215,6 +232,17 @@ void loadSettings() {
   loadGaugeColors("gc_pfn", dispSettings.partFan, def.partFan);
   loadGaugeColors("gc_afn", dispSettings.auxFan, def.auxFan);
   loadGaugeColors("gc_cfn", dispSettings.chamberFan, def.chamberFan);
+  loadGaugeColors("gc_clk", dispSettings.clock, def.clock);
+  loadGaugeColors("gc_eta", dispSettings.eta, def.eta);
+
+  // Gauge layout slots
+  if (prefs.getBytes("dsp_slots", dispSettings.gaugeSlots, GAUGE_SLOT_COUNT) != GAUGE_SLOT_COUNT) {
+    memcpy(dispSettings.gaugeSlots, def.gaugeSlots, GAUGE_SLOT_COUNT);
+  }
+  for (uint8_t i = 0; i < GAUGE_SLOT_COUNT; i++) {
+    if (dispSettings.gaugeSlots[i] >= GAUGE_TYPE_COUNT)
+      dispSettings.gaugeSlots[i] = def.gaugeSlots[i];
+  }
 
   // Network settings
   netSettings.useDHCP = prefs.getBool("net_dhcp", true);
@@ -294,6 +322,7 @@ void loadSettings() {
   buttonType = (ButtonType)prefs.getUChar("btn_type", BTN_DISABLED);
 #endif
   buttonPin = prefs.getUChar("btn_pin", BUTTON_DEFAULT_PIN);
+  btnCycleClock = prefs.getBool("btn_cyc_clk", false);
 
   // Buzzer settings
   buzzerSettings.enabled = prefs.getBool("buz_on", false);
@@ -335,6 +364,8 @@ void saveSettings() {
   prefs.putUShort("dsp_trk", dispSettings.trackColor);
   prefs.putBool("dsp_abar", dispSettings.animatedBar);
   prefs.putBool("dsp_pong", dispSettings.pongClock);
+  prefs.putBool("dsp_snake", dispSettings.snakeClock);
+  prefs.putBool("dsp_pac", dispSettings.pacmanClock);
   prefs.putBool("dsp_slbl", dispSettings.smallLabels);
   prefs.putBool("dsp_inv", dispSettings.invertColors);
   prefs.putUChar("dsp_cydex", dispSettings.cydExtraMode);
@@ -345,6 +376,10 @@ void saveSettings() {
   saveGaugeColors("gc_pfn", dispSettings.partFan);
   saveGaugeColors("gc_afn", dispSettings.auxFan);
   saveGaugeColors("gc_cfn", dispSettings.chamberFan);
+  saveGaugeColors("gc_clk", dispSettings.clock);
+  saveGaugeColors("gc_eta", dispSettings.eta);
+
+  prefs.putBytes("dsp_slots", dispSettings.gaugeSlots, GAUGE_SLOT_COUNT);
 
   // Network settings
   prefs.putBool("net_dhcp", netSettings.useDHCP);
@@ -424,6 +459,7 @@ void saveButtonSettings() {
   prefs.begin(NVS_NAMESPACE, false);
   prefs.putUChar("btn_type", buttonType);
   prefs.putUChar("btn_pin", buttonPin);
+  prefs.putBool("btn_cyc_clk", btnCycleClock);
   prefs.end();
 }
 

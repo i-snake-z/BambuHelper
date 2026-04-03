@@ -16,6 +16,7 @@ static bool finishActive = false;          // guards finishScreenStart against m
 static unsigned long idleClockStart = 0;  // when all printers became idle
 static bool idleClockActive = false;      // guards idleClockStart against millis() wrap
 static unsigned long connectingScreenStart = 0;  // for stuck-state timeout
+static bool printClockActive = false;             // user chose clock while printing
 static char prevGcodeState[MAX_ACTIVE_PRINTERS][16] = {{0}};
 
 // ---------------------------------------------------------------------------
@@ -37,6 +38,7 @@ static void handleRotation() {
       }
     }
     if (!anyPrinting) return;
+    if (scr == SCREEN_CLOCK && printClockActive) return;  // user chose clock during print
     // A printer started printing — wake display and let rotation proceed
     setBacklight(getEffectiveBrightness());
   }
@@ -130,15 +132,67 @@ void loop() {
     }
 
     // Handle physical button press
+    pollButton();  // update debounced state once per loop
     if (wasButtonPressed()) {
       ScreenState cur = getScreenState();
-      if (cur == SCREEN_OFF || cur == SCREEN_CLOCK) {
+      if (btnCycleClock) {
+        // Cycle: Printer 1 → Printer 2 → ... → Clock → Printer 1 → ...
+        if (cur == SCREEN_OFF) {
+          // Wake from full off → first configured printer
+          setBacklight(getEffectiveBrightness());
+          finishActive = false;
+          idleClockActive = false;
+          resetMqttBackoff();
+          for (uint8_t i = 0; i < MAX_ACTIVE_PRINTERS; i++) {
+            if (isPrinterConfigured(i)) { rotState.displayIndex = i; break; }
+          }
+          setScreenState(SCREEN_IDLE);
+        } else if (cur == SCREEN_CLOCK) {
+          // Clock -> first configured printer
+          setBacklight(getEffectiveBrightness());
+          finishActive = false;
+          idleClockActive = false;
+          printClockActive = false;
+          resetMqttBackoff();
+          for (uint8_t i = 0; i < MAX_ACTIVE_PRINTERS; i++) {
+            if (isPrinterConfigured(i)) { rotState.displayIndex = i; break; }
+          }
+          triggerDisplayTransition();
+          rotState.lastRotateMs = millis();
+          setScreenState(SCREEN_IDLE);
+        } else {
+          // On a printer screen → advance to next configured printer,
+          // or go to clock if no more printers remain after current
+          uint8_t current = rotState.displayIndex;
+          uint8_t nextPrinter = 0xFF;
+          for (uint8_t i = current + 1; i < MAX_ACTIVE_PRINTERS; i++) {
+            if (isPrinterConfigured(i)) { nextPrinter = i; break; }
+          }
+          if (nextPrinter != 0xFF) {
+            rotState.displayIndex = nextPrinter;
+            triggerDisplayTransition();
+            rotState.lastRotateMs = millis();
+            finishActive = false;
+          } else {
+            // All printers cycled through -> go to clock
+            finishActive = false;
+            idleClockActive = false;
+            setScreenState(SCREEN_CLOCK);
+            printClockActive = true;  // may be during a print; state machine will respect it
+          }
+        }
+      } else if (cur == SCREEN_OFF || cur == SCREEN_CLOCK) {
         // Wake from sleep + reset backoff for immediate reconnect
         setBacklight(getEffectiveBrightness());
         finishActive = false;
         idleClockActive = false;
+        printClockActive = false;
         resetMqttBackoff();
         setScreenState(SCREEN_IDLE);  // state machine will correct on next loop
+      } else if (cur == SCREEN_PRINTING) {
+        // Allow user to escape to clock while a print is in progress
+        setScreenState(SCREEN_CLOCK);
+        printClockActive = true;
       } else if (getActiveConnCount() >= 2) {
         // Cycle to next configured printer
         uint8_t idx = rotState.displayIndex;
@@ -174,7 +228,7 @@ void loop() {
     } else if (!s.connected && (current == SCREEN_OFF || current == SCREEN_CLOCK)) {
       // Stay off/clock when printer is disconnected/off
     } else if (s.connected && s.printing) {
-      if (current != SCREEN_PRINTING) {
+      if (current != SCREEN_PRINTING && !(current == SCREEN_CLOCK && printClockActive)) {
         setScreenState(SCREEN_PRINTING);
         finishActive = false;
         if (tasmotaSettings.assignedSlot == 255 ||
@@ -185,6 +239,7 @@ void loop() {
       s.doorAcknowledged = false;    // reset door ack for next finish
     } else if (s.connected && !s.printing &&
                strcmp(s.gcodeState, "FINISH") == 0) {
+      printClockActive = false;  // printing ended
       if (current != SCREEN_FINISHED && current != SCREEN_OFF && current != SCREEN_CLOCK) {
         if (tasmotaSettings.enabled &&
             (tasmotaSettings.assignedSlot == 255 ||
@@ -239,8 +294,9 @@ void loop() {
       }
     } else if (s.connected && !s.printing &&
                strcmp(s.gcodeState, "FINISH") != 0) {
-      // SCREEN_CLOCK and SCREEN_OFF are sticky — only button press or
-      // new print (s.printing → SCREEN_PRINTING) exits them
+      printClockActive = false;  // printing ended
+      // SCREEN_CLOCK and SCREEN_OFF are sticky - only button press or
+      // new print (s.printing -> SCREEN_PRINTING) exits them
       if (current == SCREEN_CLOCK || current == SCREEN_OFF) {
         // nothing — stay asleep while printer is idle
       } else if (current != SCREEN_IDLE) {

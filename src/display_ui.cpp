@@ -3,6 +3,8 @@
 #include "display_anim.h"
 #include "clock_mode.h"
 #include "clock_pong.h"
+#include "clock_snake.h"
+#include "clock_pacman.h"
 #include "icons.h"
 #include "config.h"
 #include "layout.h"
@@ -41,6 +43,9 @@ static float smoothPartFan    = 0;
 static float smoothAuxFan     = 0;
 static float smoothChamberFan = 0;
 static bool  smoothInited     = false;
+
+// Track which gauge type was last drawn in each slot (for clearing on type change)
+static uint8_t prevSlotTypes[GAUGE_SLOT_COUNT] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
 
 static bool gaugesAnimating = false;       // true while arcs are interpolating
 static const unsigned long GAUGE_ANIM_MS = 80; // ~12 Hz during animation
@@ -157,6 +162,8 @@ void applyDisplaySettings() {
   // Reset clock/pong so they redraw fully after fillScreen cleared everything
   if (currentScreen == SCREEN_CLOCK) {
     if (dispSettings.pongClock) resetPongClock();
+    else if (dispSettings.snakeClock) resetSnakeClock();
+    else if (dispSettings.pacmanClock) resetPacManClock();
     else resetClock();
   }
 }
@@ -165,6 +172,7 @@ void triggerDisplayTransition() {
   // Clear previous state so everything redraws for the new printer
   memset(&prevState, 0, sizeof(prevState));
   smoothInited = false;  // snap gauges to new printer's values
+  memset(prevSlotTypes, 0xFF, GAUGE_SLOT_COUNT);  // force slot redraw
 #if defined(DISPLAY_CYD)
   extraGaugesInited = false;
 #endif
@@ -853,6 +861,14 @@ static void drawPrinting() {
                      (s.bedTarget != prevState.bedTarget);
   bool etaChanged = forceRedraw ||
                      (s.remainingMinutes != prevState.remainingMinutes);
+  // Clock widget: check current minute against last drawn minute
+  static int8_t prevClockMin = -1;
+  struct tm nowTm;
+  bool clockMinChanged = false;
+  if (getLocalTime(&nowTm, 0)) {
+    clockMinChanged = forceRedraw || (nowTm.tm_min != prevClockMin);
+    if (clockMinChanged) prevClockMin = nowTm.tm_min;
+  }
   bool fansChanged = forceRedraw || animating ||
                      (s.coolingFanPct != prevState.coolingFanPct) ||
                      (s.auxFanPct != prevState.auxFanPct) ||
@@ -942,40 +958,81 @@ static void drawPrinting() {
     }
   }
 
-  // === Row 1: Progress | Nozzle | Bed ===
+  // === Gauge grid — 6 configurable slots (3 columns × 2 rows) ===
+  // Slot positions: 0=top-left, 1=top-mid, 2=top-right, 3=bot-left, 4=bot-mid, 5=bot-right
+  {
+    const int16_t slotX[GAUGE_SLOT_COUNT] = { col1, col2, col3, col1, col2, col3 };
+    const int16_t slotY[GAUGE_SLOT_COUNT] = { row1Y, row1Y, row1Y, row2Y, row2Y, row2Y };
 
-  if (progChanged || forceRedraw) {
-    drawProgressArc(tft, col1, row1Y, gR, gT,
-                    s.progress, prevState.progress,
-                    s.remainingMinutes, forceRedraw);
-  }
+    for (int si = 0; si < GAUGE_SLOT_COUNT; si++) {
+      uint8_t gt = dispSettings.gaugeSlots[si];
+      bool typeChanged = (gt != prevSlotTypes[si]);
+      prevSlotTypes[si] = gt;
 
-  if (tempChanged) {
-    drawTempGauge(tft, col2, row1Y, gR,
-                  s.nozzleTemp, s.nozzleTarget, 300.0f,
-                  dispSettings.nozzle.arc, nozzleLabel(s), nullptr, forceRedraw,
-                  &dispSettings.nozzle, smoothNozzleTemp);
+      bool needDraw;
+      switch (gt) {
+        case GAUGE_EMPTY:       needDraw = typeChanged || forceRedraw; break;
+        case GAUGE_PROGRESS:    needDraw = typeChanged || progChanged; break;
+        case GAUGE_NOZZLE:      needDraw = typeChanged || tempChanged; break;
+        case GAUGE_BED:         needDraw = typeChanged || tempChanged; break;
+        case GAUGE_PART_FAN:    needDraw = typeChanged || fansChanged; break;
+        case GAUGE_AUX_FAN:     needDraw = typeChanged || fansChanged; break;
+        case GAUGE_CHAMBER_FAN: needDraw = typeChanged || fansChanged; break;
+        case GAUGE_ETA:         needDraw = typeChanged || etaChanged || stateChanged; break;
+        case GAUGE_CLOCK:        needDraw = typeChanged || forceRedraw || clockMinChanged; break;
+        default:                needDraw = forceRedraw; break;
+      }
+      if (!needDraw) continue;
 
-    drawTempGauge(tft, col3, row1Y, gR,
-                  s.bedTemp, s.bedTarget, 120.0f,
-                  dispSettings.bed.arc, "Bed", nullptr, forceRedraw,
-                  &dispSettings.bed, smoothBedTemp);
-  }
+      int16_t cx = slotX[si], cy = slotY[si];
+      bool slotForce = forceRedraw || typeChanged;
 
-  // === Row 2: Part Fan | Aux Fan | Chamber Fan (y=106-176) ===
-
-  if (fansChanged) {
-    drawFanGauge(tft, col1, row2Y, gR,
-                 s.coolingFanPct, dispSettings.partFan.arc, "Part", forceRedraw,
-                 &dispSettings.partFan, smoothPartFan);
-
-    drawFanGauge(tft, col2, row2Y, gR,
-                 s.auxFanPct, dispSettings.auxFan.arc, "Aux", forceRedraw,
-                 &dispSettings.auxFan, smoothAuxFan);
-
-    drawFanGauge(tft, col3, row2Y, gR,
-                 s.chamberFanPct, dispSettings.chamberFan.arc, "Chamber", forceRedraw,
-                 &dispSettings.chamberFan, smoothChamberFan);
+      switch (gt) {
+        case GAUGE_EMPTY:
+          if (slotForce) tft.fillRect(cx - gR - gT - 3, cy - gR - gT - 16,
+                                      (gR + gT + 4) * 2, (gR + gT + 4) * 2 + 16, CLR_BG);
+          break;
+        case GAUGE_PROGRESS:
+          drawProgressArc(tft, cx, cy, gR, gT,
+                          s.progress, prevState.progress,
+                          s.remainingMinutes, slotForce);
+          break;
+        case GAUGE_NOZZLE:
+          drawTempGauge(tft, cx, cy, gR,
+                        s.nozzleTemp, s.nozzleTarget, 300.0f,
+                        dispSettings.nozzle.arc, nozzleLabel(s), nullptr, slotForce,
+                        &dispSettings.nozzle, smoothNozzleTemp);
+          break;
+        case GAUGE_BED:
+          drawTempGauge(tft, cx, cy, gR,
+                        s.bedTemp, s.bedTarget, 120.0f,
+                        dispSettings.bed.arc, "Bed", nullptr, slotForce,
+                        &dispSettings.bed, smoothBedTemp);
+          break;
+        case GAUGE_PART_FAN:
+          drawFanGauge(tft, cx, cy, gR,
+                       s.coolingFanPct, dispSettings.partFan.arc, "Part", slotForce,
+                       &dispSettings.partFan, smoothPartFan);
+          break;
+        case GAUGE_AUX_FAN:
+          drawFanGauge(tft, cx, cy, gR,
+                       s.auxFanPct, dispSettings.auxFan.arc, "Aux", slotForce,
+                       &dispSettings.auxFan, smoothAuxFan);
+          break;
+        case GAUGE_CHAMBER_FAN:
+          drawFanGauge(tft, cx, cy, gR,
+                       s.chamberFanPct, dispSettings.chamberFan.arc, "Chamber", slotForce,
+                       &dispSettings.chamberFan, smoothChamberFan);
+          break;
+        case GAUGE_ETA:
+          drawEtaWidget(tft, cx, cy, gR,
+                        s.remainingMinutes, s.printing, slotForce);
+          break;
+        case GAUGE_CLOCK:
+          drawClockWidget(tft, cx, cy, gR, slotForce);
+          break;
+      }
+    }
   }
 
   // === AMS / Extra Gauges zone (CYD: portrait + landscape) ===
@@ -1383,11 +1440,12 @@ void updateDisplay() {
     BambuState& sh = displayedPrinter().state;
     tickProgressShimmer(tft, 0, sh.progress, sh.printing);
   }
-  // Pong clock runs at ~50fps, independent of display refresh
-  if (currentScreen == SCREEN_CLOCK && dispSettings.pongClock) {
-    tickPongClock();
+  // Animated clock screensavers run at their own cadence
+  if (currentScreen == SCREEN_CLOCK) {
+    if (dispSettings.pongClock) tickPongClock();
+    else if (dispSettings.snakeClock) tickSnakeClock();
+    else if (dispSettings.pacmanClock) tickPacManClock();
   }
-
   unsigned long now = millis();
   unsigned long interval = gaugesAnimating ? GAUGE_ANIM_MS : DISPLAY_UPDATE_MS;
   if (now - lastDisplayUpdate < interval) return;
@@ -1409,6 +1467,8 @@ void updateDisplay() {
     }
     if (currentScreen == SCREEN_CLOCK) {
       if (dispSettings.pongClock) resetPongClock();
+      else if (dispSettings.snakeClock) resetSnakeClock();
+      else if (dispSettings.pacmanClock) resetPacManClock();
       else resetClock();
       setBacklight(getEffectiveBrightness());  // dim for screensaver
     }
@@ -1455,8 +1515,8 @@ void updateDisplay() {
       break;
 
     case SCREEN_CLOCK:
-      if (!dispSettings.pongClock) drawClock();
-      // Pong clock is ticked before the throttle (above)
+      if (!dispSettings.pongClock && !dispSettings.snakeClock && !dispSettings.pacmanClock) drawClock();
+      // Animated screensavers are ticked before the throttle (above)
       break;
 
     case SCREEN_OFF:

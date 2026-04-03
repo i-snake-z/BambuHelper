@@ -42,13 +42,13 @@ void drawClock() {
   }
   tft.setTextDatum(MC_DATUM);
   tft.setTextFont(7);
-  tft.setTextColor(CLR_TEXT, bg);
+  tft.setTextColor(dispSettings.clock.arc, bg);
   tft.drawString(timeBuf, LY_W / 2, LY_CLK_TIME_Y);
 
   // AM/PM indicator for 12h mode
   if (!netSettings.use24h) {
     tft.setTextFont(4);
-    tft.setTextColor(CLR_TEXT_DIM, bg);
+    tft.setTextColor(dispSettings.clock.value, bg);
     tft.drawString(now.tm_hour < 12 ? "AM" : "PM", LY_W / 2, LY_CLK_AMPM_Y);
   }
 
@@ -66,6 +66,6 @@ void drawClock() {
     default: snprintf(dateBuf, sizeof(dateBuf), "%s  %02d.%02d.%04d", days[now.tm_wday], day, mon, year); break;
   }
   tft.setTextFont(4);
-  tft.setTextColor(CLR_TEXT_DIM, bg);
+  tft.setTextColor(dispSettings.clock.label, bg);
   tft.drawString(dateBuf, LY_W / 2, LY_CLK_DATE_Y);
 }

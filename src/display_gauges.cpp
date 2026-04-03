@@ -2,6 +2,7 @@
 #include "config.h"
 #include "layout.h"
 #include "settings.h"
+#include <time.h>
 
 // ---------------------------------------------------------------------------
 //  H2-style LED progress bar
@@ -323,6 +324,117 @@ void drawTempGauge(TFT_eSPI& tft, int16_t cx, int16_t cy, int16_t radius,
     tft.setTextColor(lblColor, bg);
     tft.drawString(label, cx, cy + radius + (sm ? 3 : -1));
   }
+}
+
+// ---------------------------------------------------------------------------
+//  ETA widget — no arc ring, full slot height available, text only.
+//  < 60 min : Font 6 number (digits only) + Font 2 "min" label
+//  ≥ 60 min : Font 4 "1h" + Font 4 "23m" (letters need Font 4)
+//  idle     : Font 4 "--"
+// ---------------------------------------------------------------------------
+void drawEtaWidget(TFT_eSPI& tft, int16_t cx, int16_t cy, int16_t radius,
+                   uint16_t remainingMin, bool printing, bool forceRedraw) {
+  uint16_t bg = dispSettings.bgColor;
+  const int16_t thickness = 6;
+
+  // Build strings for change-detection (same logic as before)
+  char line1[8], line2[8];
+  if (!printing) {
+    strlcpy(line1, "--", sizeof(line1));
+    line2[0] = '\0';
+  } else if (remainingMin >= 60) {
+    snprintf(line1, sizeof(line1), "%dh", remainingMin / 60);
+    snprintf(line2, sizeof(line2), "%dm", remainingMin % 60);
+  } else {
+    snprintf(line1, sizeof(line1), "%d", remainingMin);
+    strlcpy(line2, "min", sizeof(line2));
+  }
+
+  if (!gaugeTextChanged(cx, cy, line1, line2, forceRedraw)) return;
+
+  // Clear the full slot area
+  const int16_t halfW = radius + thickness + 2;
+  const int16_t topY  = cy - radius - thickness - 2;
+  const int16_t botY  = cy + radius + 26;
+  tft.fillRect(cx - halfW, topY, halfW * 2, botY - topY, bg);
+
+  tft.setTextDatum(MC_DATUM);
+
+  if (!printing) {
+    // Idle: "--" centred in slot
+    tft.setTextFont(4);
+    tft.setTextColor(dispSettings.eta.label);
+    tft.drawString("--", cx, cy - 4);
+  } else if (remainingMin >= 60) {
+    // ≥ 60 min: "1h" / "23m" both Font 4 (letters need Font 4)
+    tft.setTextFont(4);
+    tft.setTextColor(dispSettings.eta.value);
+    tft.drawString(line1, cx, cy - 12);
+    tft.setTextColor(dispSettings.eta.label);
+    tft.drawString(line2, cx, cy + 8);
+  } else {
+    // < 60 min: large Font 6 number + Font 2 "min" below
+    tft.setTextFont(6);
+    tft.setTextColor(dispSettings.eta.value);
+    tft.drawString(line1, cx, cy - 14);
+    tft.setTextFont(2);
+    tft.setTextColor(dispSettings.eta.label);
+    tft.drawString("min", cx, cy + 22);
+  }
+
+  // Label at same Y as every other gauge — safely inside the slot boundary
+  tft.setTextFont(1);
+  tft.setTextColor(dispSettings.eta.label, bg);
+  tft.drawString("To finish", cx, cy + radius - 1);
+}
+// ---------------------------------------------------------------------------
+//  Clock widget — shows current HH:MM (or H:MM AM/PM) in the gauge slot.
+//  Uses dispSettings.clock colors. Redraws once per minute.
+// ---------------------------------------------------------------------------
+void drawClockWidget(TFT_eSPI& tft, int16_t cx, int16_t cy, int16_t radius,
+                     bool forceRedraw) {
+  struct tm now;
+  if (!getLocalTime(&now, 0)) return;   // no time sync yet
+
+  static int8_t prevMin = -1;
+  if (!forceRedraw && now.tm_min == prevMin) return;
+  prevMin = now.tm_min;
+
+  uint16_t bg = dispSettings.bgColor;
+  const int16_t thickness = 6;
+  const int16_t halfW = radius + thickness + 2;
+  const int16_t topY  = cy - radius - thickness - 2;
+  const int16_t botY  = cy + radius + 26;
+  tft.fillRect(cx - halfW, topY, halfW * 2, botY - topY, bg);
+
+  char timeBuf[8];
+  if (netSettings.use24h) {
+    snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", now.tm_hour, now.tm_min);
+  } else {
+    int h = now.tm_hour % 12;
+    if (h == 0) h = 12;
+    snprintf(timeBuf, sizeof(timeBuf), "%d:%02d", h, now.tm_min);
+  }
+
+  tft.setTextDatum(MC_DATUM);
+
+  // Time string — Font 4 fits "00:00" comfortably in the slot
+  tft.setTextFont(4);
+  tft.setTextColor(dispSettings.clock.arc);
+  if (!netSettings.use24h) {
+    tft.drawString(timeBuf, cx, cy - 8);
+    // AM/PM below in smaller font
+    tft.setTextFont(1);
+    tft.setTextColor(dispSettings.clock.value);
+    tft.drawString(now.tm_hour < 12 ? "AM" : "PM", cx, cy + 10);
+  } else {
+    tft.drawString(timeBuf, cx, cy - 4);
+  }
+
+  // Label at same Y as every other gauge
+  tft.setTextFont(1);
+  tft.setTextColor(dispSettings.clock.label, bg);
+  tft.drawString("Time", cx, cy + radius - 1);
 }
 
 // ---------------------------------------------------------------------------

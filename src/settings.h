@@ -4,6 +4,21 @@
 #include <Arduino.h>
 #include "bambu_state.h"
 
+// Gauge widget types for the configurable 6-slot display grid
+enum GaugeType : uint8_t {
+  GAUGE_EMPTY       = 0,
+  GAUGE_PROGRESS    = 1,
+  GAUGE_NOZZLE      = 2,
+  GAUGE_BED         = 3,
+  GAUGE_PART_FAN    = 4,
+  GAUGE_AUX_FAN     = 5,
+  GAUGE_CHAMBER_FAN = 6,
+  GAUGE_ETA         = 7,
+  GAUGE_CLOCK       = 8,
+  GAUGE_TYPE_COUNT  = 9,
+};
+#define GAUGE_SLOT_COUNT 6
+
 // Per-gauge color config
 struct GaugeColors {
   uint16_t arc;       // arc fill color (RGB565)
@@ -18,15 +33,20 @@ struct DisplaySettings {
   uint16_t trackColor;     // inactive arc track color
   bool     animatedBar;    // shimmer effect on progress bar
   bool     pongClock;      // Pong/Breakout animated clock
+  bool     snakeClock;     // auto-playing Snake screensaver
+  bool     pacmanClock;    // auto-playing Pac-Man screensaver
   bool     smallLabels;    // use smaller gauge labels (Font 1 instead of Font 2)
   bool     invertColors;   // invert display colors (fixes white-bg on some panels)
   uint8_t  cydExtraMode;   // CYD extra area: 0=AMS, 1=Extra Gauges
+  uint8_t  gaugeSlots[GAUGE_SLOT_COUNT]; // gauge widget in each of the 6 display positions
   GaugeColors progress;
   GaugeColors nozzle;
   GaugeColors bed;
   GaugeColors partFan;
   GaugeColors auxFan;
   GaugeColors chamberFan;
+  GaugeColors clock;
+  GaugeColors eta;
 };
 
 // Network settings
@@ -86,6 +106,7 @@ extern NetworkSettings netSettings;
 extern DisplayPowerSettings dpSettings;
 extern ButtonType buttonType;
 extern uint8_t buttonPin;
+extern bool btnCycleClock;
 extern BuzzerSettings buzzerSettings;
 extern TasmotaSettings tasmotaSettings;
 
