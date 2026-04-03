@@ -189,12 +189,24 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
   </div>
   <div class="section-content" id="sec-printer">
     <div class="section-body">
+)rawliteral"
+#ifdef BOARD_LOW_RAM
+R"rawliteral(
+      <div style="padding:10px;margin-bottom:12px;background:#0D1117;border:1px solid #30363D;border-radius:6px;font-size:12px;color:#8B949E">
+        &#9432; This board supports one printer. Use ESP32-S3 for two printers.
+      </div>
+)rawliteral"
+#else
+R"rawliteral(
       <div style="display:flex;gap:8px;margin-bottom:12px">
         <button class="tab-btn" id="tab0" onclick="selectPrinterTab(0)"
                 style="flex:1;padding:8px;border:1px solid #30363D;border-radius:6px;background:#238636;color:#fff;cursor:pointer;font-weight:600">Printer 1</button>
         <button class="tab-btn" id="tab1" onclick="selectPrinterTab(1)"
                 style="flex:1;padding:8px;border:1px solid #30363D;border-radius:6px;background:#0D1117;color:#8B949E;cursor:pointer">Printer 2</button>
       </div>
+)rawliteral"
+#endif
+R"rawliteral(
       <div id="printerStatus" class="%STATUS_CLASS%">%STATUS_TEXT%</div>
       <label for="connmode">Connection Mode</label>
       <select id="connmode" onchange="toggleConnMode()">
@@ -1661,6 +1673,14 @@ static void handleSavePrinter() {
   uint8_t slot = 0;
   if (server.hasArg("slot")) slot = server.arg("slot").toInt();
   if (slot >= MAX_ACTIVE_PRINTERS) slot = 0;
+
+#ifdef BOARD_LOW_RAM
+  if (slot > 0) {
+    server.send(200, "application/json",
+      "{\"status\":\"error\",\"message\":\"This board supports only one printer due to RAM limits. Use ESP32-S3 for two printers.\"}");
+    return;
+  }
+#endif
 
   PrinterConfig& cfg = printers[slot].config;
   if (server.hasArg("connmode")) {

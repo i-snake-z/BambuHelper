@@ -203,9 +203,16 @@ void loop() {
             triggerDisplayTransition();
             rotState.lastRotateMs = millis();  // reset auto-rotate timer
             finishActive = false;
+            // If switching to a cloud printer in UNKNOWN state, try a refresh
+            requestCloudRefresh(next);
             break;
           }
         }
+      } else if (cur == SCREEN_IDLE &&
+                 isCloudMode(displayedPrinter().config.mode) &&
+                 strcmp(displayedPrinter().state.gcodeState, "UNKNOWN") == 0) {
+        // Single printer, cloud, UNKNOWN - manual refresh
+        requestCloudRefresh(rotState.displayIndex);
       }
     }
 

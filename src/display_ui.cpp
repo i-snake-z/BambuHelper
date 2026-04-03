@@ -522,6 +522,30 @@ static void drawIdle() {
     tft.fillCircle(cx, LY_IDLE_DOT_Y, 5, s.connected ? CLR_GREEN : CLR_RED);
   }
 
+  // "Press to refresh" hint for cloud printers stuck in UNKNOWN state
+  {
+    static unsigned long unknownSinceMs = 0;
+    static bool hintShown = false;
+    bool isUnknown = (strcmp(s.gcodeState, "UNKNOWN") == 0);
+    if (isUnknown && unknownSinceMs == 0) unknownSinceMs = millis();
+    if (!isUnknown) unknownSinceMs = 0;
+    bool showHint = isUnknown && unknownSinceMs > 0 &&
+                    millis() - unknownSinceMs > 60000 &&
+                    buttonType != BTN_DISABLED &&
+                    isCloudMode(p.config.mode) && s.connected;
+    if (stateChanged || showHint != hintShown) {
+      const int16_t hintY = LY_IDLE_DOT_Y + 15;
+      tft.fillRect(0, hintY - 6, scrW, 14, CLR_BG);
+      if (showHint) {
+        tft.setTextFont(1);
+        tft.setTextDatum(MC_DATUM);
+        tft.setTextColor(CLR_TEXT_DARK, CLR_BG);
+        tft.drawString("Press to refresh", cx, hintY);
+      }
+      hintShown = showHint;
+    }
+  }
+
   // Nozzle temp gauge
   if (tempChanged) {
     drawTempGauge(tft, cx - LY_IDLE_G_OFFSET, LY_IDLE_GAUGE_Y, LY_IDLE_GAUGE_R,

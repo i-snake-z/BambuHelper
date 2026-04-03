@@ -52,7 +52,7 @@ When using Bambu Cloud, BambuHelper connects through Bambu Lab's cloud MQTT serv
 - **Auto AP mode** - creates WiFi hotspot on first boot or when WiFi is lost
 - **Smart redraw** - only redraws changed UI elements for smooth performance
 - **Customizable gauge colors** - per-gauge arc/label/value colors with preset themes
-- **Multi-printer support** - monitor up to 2 printers simultaneously with auto-rotating display
+- **Multi-printer support** - monitor up to 2 printers simultaneously with auto-rotating display (ESP32-S3 only - CYD/C3 limited to 1 printer due to RAM)
 - **Smart rotation** - automatically shows the printing printer; cycles between both when both are printing
 - **Physical button** - optional push button or TTP223 touch sensor to cycle printers and wake display
 - **Optional buzzer** - passive buzzer notifications for print finished, connected, and error events
@@ -318,6 +318,8 @@ tools/
 ## Multi-Printer Monitoring
 
 BambuHelper supports monitoring up to 2 printers simultaneously via dual MQTT connections.
+
+> **CYD and ESP32-C3 boards are limited to 1 printer.** Each MQTT connection requires ~85 KB of RAM (TLS session + message buffer), and the classic ESP32 / C3 do not have enough free heap for two simultaneous connections. The web interface on these boards hides the second printer tab and shows a notice. Use an ESP32-S3 board if you need two printers.
 
 ### Rotation Modes
 
