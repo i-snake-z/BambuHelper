@@ -397,12 +397,17 @@ void drawClockWidget(TFT_eSPI& tft, int16_t cx, int16_t cy, int16_t radius,
   localtime_r(&now, &tm);
 
   char timeBuf[8];
-  int h = tm.tm_hour;
-  if (!netSettings.use24h) {
-    h = h % 12;
-    if (h == 0) h = 12;
+  // Show placeholder until NTP has synced
+  if (now < 1704067200) {  // 2024-01-01 00:00:00 UTC
+    strlcpy(timeBuf, "--:--", sizeof(timeBuf));
+  } else {
+    int h = tm.tm_hour;
+    if (!netSettings.use24h) {
+      h = h % 12;
+      if (h == 0) h = 12;
+    }
+    snprintf(timeBuf, sizeof(timeBuf), "%d:%02d", h, tm.tm_min);
   }
-  snprintf(timeBuf, sizeof(timeBuf), "%d:%02d", h, tm.tm_min);
 
   if (gaugeTextChanged(cx, cy, timeBuf, "", forceRedraw)) {
     tft.fillCircle(cx, cy, radius - 1, bg);

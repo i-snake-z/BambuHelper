@@ -2188,9 +2188,13 @@ static void handleSettingsImportFinish() {
       if (p["region"].is<uint8_t>())          cfg.region = (CloudRegion)p["region"].as<uint8_t>();
       JsonArray slots = p["gaugeSlots"];
       if (slots && slots.size() == GAUGE_SLOT_COUNT) {
+        static const uint8_t defSlots[GAUGE_SLOT_COUNT] = {
+          GAUGE_PROGRESS, GAUGE_NOZZLE, GAUGE_BED,
+          GAUGE_PART_FAN, GAUGE_AUX_FAN, GAUGE_CHAMBER_FAN
+        };
         for (uint8_t g = 0; g < GAUGE_SLOT_COUNT; g++) {
           uint8_t v = slots[g].as<uint8_t>();
-          cfg.gaugeSlots[g] = (v < GAUGE_TYPE_COUNT) ? v : GAUGE_PROGRESS;
+          cfg.gaugeSlots[g] = (v < GAUGE_TYPE_COUNT) ? v : defSlots[g];
         }
       }
     }

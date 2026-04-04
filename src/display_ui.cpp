@@ -922,7 +922,7 @@ static void drawPrinting() {
       bool needDraw = forceRedraw || typeChanged;
       if (!needDraw) {
         switch (gt) {
-          case GAUGE_PROGRESS:    needDraw = (s.progress != prevState.progress); break;
+          case GAUGE_PROGRESS:    needDraw = (s.progress != prevState.progress) || (s.remainingMinutes != prevState.remainingMinutes); break;
           case GAUGE_NOZZLE:      needDraw = animating || s.nozzleTemp != prevState.nozzleTemp || s.nozzleTarget != prevState.nozzleTarget; break;
           case GAUGE_BED:         needDraw = animating || s.bedTemp != prevState.bedTemp || s.bedTarget != prevState.bedTarget; break;
           case GAUGE_PART_FAN:    needDraw = animating || s.coolingFanPct != prevState.coolingFanPct; break;
