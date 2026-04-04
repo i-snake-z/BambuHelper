@@ -1356,227 +1356,312 @@ fetch('/api/timezones').then(function(r){return r.json();}).then(function(d){
 )rawliteral";
 
 // ---------------------------------------------------------------------------
-//  Helper: replace gauge color placeholders
+//  Resolve a single template placeholder to its value.
+//  Returns true if name was a known placeholder (even if value is empty).
 // ---------------------------------------------------------------------------
-static void replaceGaugeColors(String& page, const char* prefix, const GaugeColors& gc) {
-  char buf[8];
-  char placeholder[12];
-
-  snprintf(placeholder, sizeof(placeholder), "%%%s_A%%", prefix);
-  rgb565ToHtml(gc.arc, buf);
-  page.replace(placeholder, buf);
-
-  snprintf(placeholder, sizeof(placeholder), "%%%s_L%%", prefix);
-  rgb565ToHtml(gc.label, buf);
-  page.replace(placeholder, buf);
-
-  snprintf(placeholder, sizeof(placeholder), "%%%s_V%%", prefix);
-  rgb565ToHtml(gc.value, buf);
-  page.replace(placeholder, buf);
-}
-
-// ---------------------------------------------------------------------------
-//  Template processor
-// ---------------------------------------------------------------------------
-static void processTemplate(String& page) {
+static bool resolvePlaceholder(const char* name, String& out) {
   PrinterConfig& cfg = printers[0].config;
   BambuState& st = printers[0].state;
+  char buf[8];
 
-  page.replace("%SSID%", wifiSSID);
-  page.replace("%MODE_LOCAL%", cfg.mode == CONN_LOCAL ? "selected" : "");
-  page.replace("%MODE_CLOUD_ALL%", isCloudMode(cfg.mode) ? "selected" : "");
-  page.replace("%PNAME%", cfg.name);
-  page.replace("%IP%", cfg.ip);
-  page.replace("%SERIAL%", cfg.serial);
-  // Cloud region dropdown
-  page.replace("%REGION_US%", cfg.region == REGION_US ? "selected" : "");
-  page.replace("%REGION_EU%", cfg.region == REGION_EU ? "selected" : "");
-  page.replace("%REGION_CN%", cfg.region == REGION_CN ? "selected" : "");
-
-  // Cloud status text
-  {
+  // --- Printer ---
+  if (strcmp(name, "SSID") == 0)           { out = wifiSSID; return true; }
+  if (strcmp(name, "MODE_LOCAL") == 0)      { out = cfg.mode == CONN_LOCAL ? "selected" : ""; return true; }
+  if (strcmp(name, "MODE_CLOUD_ALL") == 0)  { out = isCloudMode(cfg.mode) ? "selected" : ""; return true; }
+  if (strcmp(name, "PNAME") == 0)           { out = cfg.name; return true; }
+  if (strcmp(name, "IP") == 0)              { out = cfg.ip; return true; }
+  if (strcmp(name, "SERIAL") == 0)          { out = cfg.serial; return true; }
+  if (strcmp(name, "REGION_US") == 0)       { out = cfg.region == REGION_US ? "selected" : ""; return true; }
+  if (strcmp(name, "REGION_EU") == 0)       { out = cfg.region == REGION_EU ? "selected" : ""; return true; }
+  if (strcmp(name, "REGION_CN") == 0)       { out = cfg.region == REGION_CN ? "selected" : ""; return true; }
+  if (strcmp(name, "CLOUD_STATUS") == 0) {
     char tokenBuf[32];
     bool hasToken = loadCloudToken(tokenBuf, sizeof(tokenBuf));
-    page.replace("%CLOUD_STATUS%", hasToken ? "Token active" : "No token set");
+    out = hasToken ? "Token active" : "No token set";
+    return true;
   }
-  page.replace("%BRIGHT%", String(brightness));
 
-  // Night mode
-  page.replace("%NIGHTEN%", dpSettings.nightModeEnabled ? "checked" : "");
-  page.replace("%NIGHTDISP%", dpSettings.nightModeEnabled ? "block" : "none");
-  page.replace("%NBRIGHT%", String(dpSettings.nightBrightness));
-  page.replace("%SSBRIGHT%", String(dpSettings.screensaverBrightness));
-  {
-    String startOpts, endOpts;
+  // --- Brightness / Night mode ---
+  if (strcmp(name, "BRIGHT") == 0)          { out = String(brightness); return true; }
+  if (strcmp(name, "NIGHTEN") == 0)         { out = dpSettings.nightModeEnabled ? "checked" : ""; return true; }
+  if (strcmp(name, "NIGHTDISP") == 0)       { out = dpSettings.nightModeEnabled ? "block" : "none"; return true; }
+  if (strcmp(name, "NBRIGHT") == 0)         { out = String(dpSettings.nightBrightness); return true; }
+  if (strcmp(name, "SSBRIGHT") == 0)        { out = String(dpSettings.screensaverBrightness); return true; }
+  if (strcmp(name, "NIGHT_START_OPTS") == 0) {
+    out = "";
     for (uint8_t h = 0; h < 24; h++) {
       char opt[64];
       snprintf(opt, sizeof(opt), "<option value=\"%d\"%s>%02d:00</option>",
                h, h == dpSettings.nightStartHour ? " selected" : "", h);
-      startOpts += opt;
+      out += opt;
+    }
+    return true;
+  }
+  if (strcmp(name, "NIGHT_END_OPTS") == 0) {
+    out = "";
+    for (uint8_t h = 0; h < 24; h++) {
+      char opt[64];
       snprintf(opt, sizeof(opt), "<option value=\"%d\"%s>%02d:00</option>",
                h, h == dpSettings.nightEndHour ? " selected" : "", h);
-      endOpts += opt;
+      out += opt;
     }
-    page.replace("%NIGHT_START_OPTS%", startOpts);
-    page.replace("%NIGHT_END_OPTS%", endOpts);
+    return true;
   }
 
-  // Network settings
-  page.replace("%NET_DHCP%", netSettings.useDHCP ? "selected" : "");
-  page.replace("%NET_STATIC%", netSettings.useDHCP ? "" : "selected");
-  page.replace("%NET_IP%", netSettings.staticIP);
-  page.replace("%NET_GW%", netSettings.gateway);
-  page.replace("%NET_SN%", netSettings.subnet);
-  page.replace("%NET_DNS%", netSettings.dns);
-  page.replace("%SHOWIP%", netSettings.showIPAtStartup ? "checked" : "");
+  // --- Network ---
+  if (strcmp(name, "NET_DHCP") == 0)   { out = netSettings.useDHCP ? "selected" : ""; return true; }
+  if (strcmp(name, "NET_STATIC") == 0) { out = netSettings.useDHCP ? "" : "selected"; return true; }
+  if (strcmp(name, "NET_IP") == 0)     { out = netSettings.staticIP; return true; }
+  if (strcmp(name, "NET_GW") == 0)     { out = netSettings.gateway; return true; }
+  if (strcmp(name, "NET_SN") == 0)     { out = netSettings.subnet; return true; }
+  if (strcmp(name, "NET_DNS") == 0)    { out = netSettings.dns; return true; }
+  if (strcmp(name, "SHOWIP") == 0)     { out = netSettings.showIPAtStartup ? "checked" : ""; return true; }
 
-  // Timezone is now loaded via AJAX (/api/timezones) to save RAM on C3
-
-  page.replace("%USE24H%", netSettings.use24h ? "checked" : "");
-  for (int i = 0; i < 6; i++) {
-    char ph[12]; snprintf(ph, sizeof(ph), "%%DATEFMT%d%%", i);
-    page.replace(ph, netSettings.dateFormat == i ? "selected" : "");
+  // --- Clock ---
+  if (strcmp(name, "USE24H") == 0)     { out = netSettings.use24h ? "checked" : ""; return true; }
+  // DATEFMT0..DATEFMT5
+  if (strncmp(name, "DATEFMT", 7) == 0 && name[7] >= '0' && name[7] <= '5' && name[8] == '\0') {
+    out = netSettings.dateFormat == (name[7] - '0') ? "selected" : "";
+    return true;
   }
 
-  // Rotation dropdown
-  page.replace("%ROT0%", dispSettings.rotation == 0 ? "selected" : "");
-  page.replace("%ROT1%", dispSettings.rotation == 1 ? "selected" : "");
-  page.replace("%ROT2%", dispSettings.rotation == 2 ? "selected" : "");
-  page.replace("%ROT3%", dispSettings.rotation == 3 ? "selected" : "");
+  // --- Display rotation ---
+  if (strncmp(name, "ROT", 3) == 0 && name[3] >= '0' && name[3] <= '3' && name[4] == '\0') {
+    out = dispSettings.rotation == (name[3] - '0') ? "selected" : "";
+    return true;
+  }
 
-  // Display power
-  // After-print dropdown: determine which option is selected
+  // --- After-print ---
   {
     uint16_t fm = dpSettings.finishDisplayMins;
     bool keepon = dpSettings.keepDisplayOn;
     bool isPreset = (!keepon && (fm == 0 || fm == 1 || fm == 3 || fm == 5 || fm == 10));
-    page.replace("%AP_CLOCK0%", (!keepon && fm == 0) ? "selected" : "");
-    page.replace("%AP_F1%",     (!keepon && fm == 1) ? "selected" : "");
-    page.replace("%AP_F3%",     (!keepon && fm == 3) ? "selected" : "");
-    page.replace("%AP_F5%",     (!keepon && fm == 5) ? "selected" : "");
-    page.replace("%AP_F10%",    (!keepon && fm == 10) ? "selected" : "");
-    page.replace("%AP_CUSTOM%", (!keepon && !isPreset && fm > 0) ? "selected" : "");
-    page.replace("%AP_KEEPON%", keepon ? "selected" : "");
-    page.replace("%CUSTOM_DISP%", (!keepon && !isPreset && fm > 0) ? "block" : "none");
-    page.replace("%FMINS%", String(fm));
+    if (strcmp(name, "AP_CLOCK0") == 0)    { out = (!keepon && fm == 0) ? "selected" : ""; return true; }
+    if (strcmp(name, "AP_F1") == 0)        { out = (!keepon && fm == 1) ? "selected" : ""; return true; }
+    if (strcmp(name, "AP_F3") == 0)        { out = (!keepon && fm == 3) ? "selected" : ""; return true; }
+    if (strcmp(name, "AP_F5") == 0)        { out = (!keepon && fm == 5) ? "selected" : ""; return true; }
+    if (strcmp(name, "AP_F10") == 0)       { out = (!keepon && fm == 10) ? "selected" : ""; return true; }
+    if (strcmp(name, "AP_CUSTOM") == 0)    { out = (!keepon && !isPreset && fm > 0) ? "selected" : ""; return true; }
+    if (strcmp(name, "AP_KEEPON") == 0)    { out = keepon ? "selected" : ""; return true; }
+    if (strcmp(name, "CUSTOM_DISP") == 0)  { out = (!keepon && !isPreset && fm > 0) ? "block" : "none"; return true; }
+    if (strcmp(name, "FMINS") == 0)        { out = String(fm); return true; }
   }
-  page.replace("%DACK%", dpSettings.doorAckEnabled ? "checked" : "");
-  page.replace("%ABAR%", dispSettings.animatedBar ? "checked" : "");
-  page.replace("%PONG%", dispSettings.pongClock ? "checked" : "");
-  page.replace("%SLBL%", dispSettings.smallLabels ? "checked" : "");
+
+  // --- Display options ---
+  if (strcmp(name, "DACK") == 0)  { out = dpSettings.doorAckEnabled ? "checked" : ""; return true; }
+  if (strcmp(name, "ABAR") == 0)  { out = dispSettings.animatedBar ? "checked" : ""; return true; }
+  if (strcmp(name, "PONG") == 0)  { out = dispSettings.pongClock ? "checked" : ""; return true; }
+  if (strcmp(name, "SLBL") == 0)  { out = dispSettings.smallLabels ? "checked" : ""; return true; }
+  if (strcmp(name, "INVCOL_ROW") == 0) {
 #if defined(DISPLAY_CYD)
-  {
-    String row = "<div class=\"check-row\">"
+    out = "<div class=\"check-row\">"
       "<input type=\"checkbox\" id=\"invcol\" value=\"1\" ";
-    row += dispSettings.invertColors ? "checked" : "";
-    row += " onchange=\"toggleSetting('invcol',this.checked)\">"
+    out += dispSettings.invertColors ? "checked" : "";
+    out += " onchange=\"toggleSetting('invcol',this.checked)\">"
       "<label for=\"invcol\">Invert display colors (fix white background)</label>"
       "</div>";
-    page.replace("%INVCOL_ROW%", row);
-  }
 #else
-  page.replace("%INVCOL_ROW%", "");
+    out = "";
 #endif
-
-  // Global colors
-  char buf[8];
-  rgb565ToHtml(dispSettings.bgColor, buf);
-  page.replace("%CLR_BG%", buf);
-  rgb565ToHtml(dispSettings.trackColor, buf);
-  page.replace("%CLR_TRACK%", buf);
-  rgb565ToHtml(dispSettings.clockTimeColor, buf);
-  page.replace("%CLK_TIME%", buf);
-  rgb565ToHtml(dispSettings.clockDateColor, buf);
-  page.replace("%CLK_DATE%", buf);
-
-  // Per-gauge colors
-  replaceGaugeColors(page, "PRG", dispSettings.progress);
-  replaceGaugeColors(page, "NOZ", dispSettings.nozzle);
-  replaceGaugeColors(page, "BED", dispSettings.bed);
-  replaceGaugeColors(page, "PFN", dispSettings.partFan);
-  replaceGaugeColors(page, "AFN", dispSettings.auxFan);
-  replaceGaugeColors(page, "CFN", dispSettings.chamberFan);
-  replaceGaugeColors(page, "CHT", dispSettings.chamberTemp);
-  replaceGaugeColors(page, "HBK", dispSettings.heatbreak);
-
-  page.replace("%DBGLOG%", mqttDebugLog ? "checked" : "");
-  page.replace("%FW_VER%", FW_VERSION);
-  page.replace("%BOARD%", BOARD_VARIANT);
-
-  if (st.connected) {
-    page.replace("%STATUS_CLASS%", "status status-ok");
-    page.replace("%STATUS_TEXT%", "Connected");
-  } else if (isPrinterConfigured(0)) {
-    page.replace("%STATUS_CLASS%", "status status-off");
-    page.replace("%STATUS_TEXT%", "Disconnected");
-  } else {
-    page.replace("%STATUS_CLASS%", "status status-na");
-    page.replace("%STATUS_TEXT%", "Not configured");
+    return true;
   }
 
-  // Rotation mode (multi-printer)
-  page.replace("%RMODE_OFF%", rotState.mode == ROTATE_OFF ? "selected" : "");
-  page.replace("%RMODE_AUTO%", rotState.mode == ROTATE_AUTO ? "selected" : "");
-  page.replace("%RMODE_SMART%", rotState.mode == ROTATE_SMART ? "selected" : "");
-  page.replace("%ROT_INTERVAL%", String(rotState.intervalMs / 1000));
+  // --- Colors (global + per-gauge) ---
+  if (strcmp(name, "CLR_BG") == 0)    { rgb565ToHtml(dispSettings.bgColor, buf); out = buf; return true; }
+  if (strcmp(name, "CLR_TRACK") == 0) { rgb565ToHtml(dispSettings.trackColor, buf); out = buf; return true; }
+  if (strcmp(name, "CLK_TIME") == 0)  { rgb565ToHtml(dispSettings.clockTimeColor, buf); out = buf; return true; }
+  if (strcmp(name, "CLK_DATE") == 0)  { rgb565ToHtml(dispSettings.clockDateColor, buf); out = buf; return true; }
 
-  // Button settings
-  page.replace("%BTN_OFF%", buttonType == BTN_DISABLED ? "selected" : "");
-  page.replace("%BTN_PUSH%", buttonType == BTN_PUSH ? "selected" : "");
-  page.replace("%BTN_TOUCH%", buttonType == BTN_TOUCH ? "selected" : "");
-  page.replace("%BTN_SCREEN%", buttonType == BTN_TOUCHSCREEN ? "selected" : "");
-  page.replace("%BTN_PIN%", String(buttonPin));
-
-  // Buzzer settings
-  page.replace("%BUZ_OFF%", buzzerSettings.enabled ? "" : "selected");
-  page.replace("%BUZ_ON%", buzzerSettings.enabled ? "selected" : "");
-  page.replace("%BUZ_PIN%", String(buzzerSettings.pin));
-  page.replace("%BUZ_QS%", String(buzzerSettings.quietStartHour));
-  page.replace("%BUZ_QE%", String(buzzerSettings.quietEndHour));
-
-  // Tasmota power monitoring
-  page.replace("%TSM_EN%", tasmotaSettings.enabled ? "checked" : "");
-  page.replace("%TSM_IP%", tasmotaSettings.ip);
-  page.replace("%TSM_DM0%", tasmotaSettings.displayMode == 0 ? "checked" : "");
-  page.replace("%TSM_DM1%", tasmotaSettings.displayMode == 1 ? "checked" : "");
-  // Tasmota slot dropdown (dynamic, based on configured printers)
+  // Per-gauge: PRG_A, PRG_L, PRG_V, NOZ_A, etc.
   {
-    String slotOpts;
-    slotOpts += "<option value=\"255\"";
-    if (tasmotaSettings.assignedSlot == 255) slotOpts += " selected";
-    slotOpts += ">Any printer</option>";
+    static const struct { const char* prefix; const GaugeColors* gc; } gauges[] = {
+      {"PRG", &dispSettings.progress}, {"NOZ", &dispSettings.nozzle},
+      {"BED", &dispSettings.bed},      {"PFN", &dispSettings.partFan},
+      {"AFN", &dispSettings.auxFan},   {"CFN", &dispSettings.chamberFan},
+      {"CHT", &dispSettings.chamberTemp}, {"HBK", &dispSettings.heatbreak},
+    };
+    for (auto& g : gauges) {
+      size_t plen = strlen(g.prefix);
+      if (strncmp(name, g.prefix, plen) == 0 && name[plen] == '_' && name[plen+2] == '\0') {
+        char suffix = name[plen+1];
+        if (suffix == 'A')      rgb565ToHtml(g.gc->arc, buf);
+        else if (suffix == 'L') rgb565ToHtml(g.gc->label, buf);
+        else if (suffix == 'V') rgb565ToHtml(g.gc->value, buf);
+        else continue;
+        out = buf;
+        return true;
+      }
+    }
+  }
+
+  // --- Status ---
+  if (strcmp(name, "DBGLOG") == 0)  { out = mqttDebugLog ? "checked" : ""; return true; }
+  if (strcmp(name, "FW_VER") == 0)  { out = FW_VERSION; return true; }
+  if (strcmp(name, "BOARD") == 0)   { out = BOARD_VARIANT; return true; }
+  if (strcmp(name, "STATUS_CLASS") == 0) {
+    out = st.connected ? "status status-ok" : isPrinterConfigured(0) ? "status status-off" : "status status-na";
+    return true;
+  }
+  if (strcmp(name, "STATUS_TEXT") == 0) {
+    out = st.connected ? "Connected" : isPrinterConfigured(0) ? "Disconnected" : "Not configured";
+    return true;
+  }
+
+  // --- Multi-printer rotation ---
+  if (strcmp(name, "RMODE_OFF") == 0)   { out = rotState.mode == ROTATE_OFF ? "selected" : ""; return true; }
+  if (strcmp(name, "RMODE_AUTO") == 0)  { out = rotState.mode == ROTATE_AUTO ? "selected" : ""; return true; }
+  if (strcmp(name, "RMODE_SMART") == 0) { out = rotState.mode == ROTATE_SMART ? "selected" : ""; return true; }
+  if (strcmp(name, "ROT_INTERVAL") == 0){ out = String(rotState.intervalMs / 1000); return true; }
+
+  // --- Button ---
+  if (strcmp(name, "BTN_OFF") == 0)    { out = buttonType == BTN_DISABLED ? "selected" : ""; return true; }
+  if (strcmp(name, "BTN_PUSH") == 0)   { out = buttonType == BTN_PUSH ? "selected" : ""; return true; }
+  if (strcmp(name, "BTN_TOUCH") == 0)  { out = buttonType == BTN_TOUCH ? "selected" : ""; return true; }
+  if (strcmp(name, "BTN_SCREEN") == 0) { out = buttonType == BTN_TOUCHSCREEN ? "selected" : ""; return true; }
+  if (strcmp(name, "BTN_PIN") == 0)    { out = String(buttonPin); return true; }
+
+  // --- Buzzer ---
+  if (strcmp(name, "BUZ_OFF") == 0) { out = buzzerSettings.enabled ? "" : "selected"; return true; }
+  if (strcmp(name, "BUZ_ON") == 0)  { out = buzzerSettings.enabled ? "selected" : ""; return true; }
+  if (strcmp(name, "BUZ_PIN") == 0) { out = String(buzzerSettings.pin); return true; }
+  if (strcmp(name, "BUZ_QS") == 0)  { out = String(buzzerSettings.quietStartHour); return true; }
+  if (strcmp(name, "BUZ_QE") == 0)  { out = String(buzzerSettings.quietEndHour); return true; }
+
+  // --- Tasmota ---
+  if (strcmp(name, "TSM_EN") == 0)  { out = tasmotaSettings.enabled ? "checked" : ""; return true; }
+  if (strcmp(name, "TSM_IP") == 0)  { out = tasmotaSettings.ip; return true; }
+  if (strcmp(name, "TSM_DM0") == 0) { out = tasmotaSettings.displayMode == 0 ? "checked" : ""; return true; }
+  if (strcmp(name, "TSM_DM1") == 0) { out = tasmotaSettings.displayMode == 1 ? "checked" : ""; return true; }
+  if (strcmp(name, "TSM_SLOT_OPTIONS") == 0) {
+    out = "<option value=\"255\"";
+    if (tasmotaSettings.assignedSlot == 255) out += " selected";
+    out += ">Any printer</option>";
     for (uint8_t i = 0; i < MAX_ACTIVE_PRINTERS; i++) {
       if (!isPrinterConfigured(i)) continue;
-      slotOpts += "<option value=\"";
-      slotOpts += String(i);
-      slotOpts += "\"";
-      if (tasmotaSettings.assignedSlot == i) slotOpts += " selected";
-      slotOpts += ">";
+      out += "<option value=\"";
+      out += String(i);
+      out += "\"";
+      if (tasmotaSettings.assignedSlot == i) out += " selected";
+      out += ">";
       const char* nm = printers[i].config.name;
-      if (nm[0] != '\0') slotOpts += nm;
-      else { slotOpts += "Printer "; slotOpts += String(i + 1); }
-      slotOpts += "</option>";
+      if (nm[0] != '\0') out += nm;
+      else { out += "Printer "; out += String(i + 1); }
+      out += "</option>";
     }
-    page.replace("%TSM_SLOT_OPTIONS%", slotOpts);
+    return true;
   }
-  // Tasmota poll interval dropdown
-  {
+  if (strcmp(name, "TSM_PI_OPTIONS") == 0) {
     static const uint8_t intervals[] = {10, 15, 20, 30, 60};
     static const char* const labels[] = {"10 seconds", "15 seconds", "20 seconds", "30 seconds", "60 seconds"};
     uint8_t cur = tasmotaSettings.pollInterval > 0 ? tasmotaSettings.pollInterval : 10;
-    String piOpts;
+    out = "";
     for (int i = 0; i < 5; i++) {
-      piOpts += "<option value=\"";
-      piOpts += String(intervals[i]);
-      piOpts += "\"";
-      if (cur == intervals[i]) piOpts += " selected";
-      piOpts += ">";
-      piOpts += labels[i];
-      piOpts += "</option>";
+      out += "<option value=\"";
+      out += String(intervals[i]);
+      out += "\"";
+      if (cur == intervals[i]) out += " selected";
+      out += ">";
+      out += labels[i];
+      out += "</option>";
     }
-    page.replace("%TSM_PI_OPTIONS%", piOpts);
+    return true;
   }
 
+  return false;  // unknown placeholder
+}
+
+// ---------------------------------------------------------------------------
+//  Stream the HTML template from PROGMEM, resolving placeholders on the fly.
+//  Peak heap: ~CHUNK_SIZE bytes instead of ~64KB for the full page.
+// ---------------------------------------------------------------------------
+static void streamTemplate() {
+  static const size_t CHUNK_SIZE = 512;
+
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  server.send(200, "text/html", "");
+
+  // On ESP32, PROGMEM is directly memory-mapped and readable as const char*.
+  const char* tmpl = PAGE_HTML;
+  const size_t tmplLen = sizeof(PAGE_HTML) - 1;
+  const char* end = tmpl + tmplLen;
+
+  // Buffer for accumulating literal HTML before flushing
+  const char* chunkStart = tmpl;
+
+  // Helper lambda: flush literal bytes from PROGMEM [chunkStart..pos)
+  auto flushTo = [&](const char* pos) {
+    while (chunkStart < pos) {
+      size_t n = pos - chunkStart;
+      if (n > CHUNK_SIZE) n = CHUNK_SIZE;
+      // Copy to stack buffer to create String for sendContent
+      char stackBuf[CHUNK_SIZE + 1];
+      memcpy(stackBuf, chunkStart, n);
+      stackBuf[n] = '\0';
+      server.sendContent(stackBuf);
+      chunkStart += n;
+    }
+  };
+
+  const char* pos = tmpl;
+  while (pos < end) {
+    // Look for '%' - potential placeholder start
+    if (*pos != '%') { pos++; continue; }
+
+    // Check if next char is uppercase letter (all our placeholders start A-Z)
+    if (pos + 1 >= end || !(pos[1] >= 'A' && pos[1] <= 'Z')) {
+      pos++;
+      continue;
+    }
+
+    // Find closing '%'
+    const char* pEnd = pos + 2;
+    while (pEnd < end && *pEnd != '%' && *pEnd != '\n' && (pEnd - pos) < 30) pEnd++;
+    if (pEnd >= end || *pEnd != '%') {
+      // No closing '%' found - not a placeholder
+      pos++;
+      continue;
+    }
+
+    // Validate: all chars between %...% must be [A-Z0-9_]
+    bool valid = true;
+    for (const char* c = pos + 1; c < pEnd; c++) {
+      if (!((*c >= 'A' && *c <= 'Z') || (*c >= '0' && *c <= '9') || *c == '_')) {
+        valid = false;
+        break;
+      }
+    }
+    if (!valid) { pos++; continue; }
+
+    // Extract placeholder name
+    size_t nameLen = pEnd - pos - 1;
+    char name[32];
+    if (nameLen >= sizeof(name)) { pos++; continue; }
+    memcpy(name, pos + 1, nameLen);
+    name[nameLen] = '\0';
+
+    // Try to resolve
+    String value;
+    if (resolvePlaceholder(name, value)) {
+      // Flush everything before this placeholder
+      flushTo(pos);
+      // Send the resolved value
+      if (value.length() > 0) {
+        server.sendContent(value);
+      }
+      // Skip past closing '%'
+      pos = pEnd + 1;
+      chunkStart = pos;
+    } else {
+      // Unknown placeholder - send as literal text
+      pos++;
+    }
+  }
+
+  // Flush remaining
+  flushTo(end);
+
+  server.sendContent("");  // End chunked response
 }
 
 // ---------------------------------------------------------------------------
@@ -1663,9 +1748,7 @@ static void handleRoot() {
     server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     server.send(200, "text/html", FPSTR(PAGE_AP_HTML));
   } else {
-    String page = FPSTR(PAGE_HTML);
-    processTemplate(page);
-    server.send(200, "text/html", page);
+    streamTemplate();
   }
 }
 
@@ -1860,12 +1943,20 @@ static void handleTimezones() {
   server.sendContent(",\"zones\":[");
   for (size_t i = 0; i < tzCount; i++) {
     if (i > 0) server.sendContent(",");
-    // JSON-encode the name (names don't contain quotes/backslashes)
-    server.sendContent("\"");
-    server.sendContent(regions[i].name);
-    server.sendContent("\"");
+    // JSON-escape the label into a stack buffer (defensive - current labels are clean)
+    char esc[80];
+    size_t j = 0;
+    esc[j++] = '"';
+    for (const char* p = regions[i].name; *p && j < sizeof(esc) - 2; p++) {
+      if (*p == '"' || *p == '\\') esc[j++] = '\\';
+      esc[j++] = *p;
+    }
+    esc[j++] = '"';
+    esc[j] = '\0';
+    server.sendContent(esc);
   }
   server.sendContent("]}");
+  server.sendContent("");  // terminate chunked response
 }
 
 static void handleReset() {
