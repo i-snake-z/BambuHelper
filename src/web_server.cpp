@@ -373,9 +373,7 @@ R"rawliteral(
       <div style="margin-top:16px;padding-top:12px;border-top:1px solid #30363D">
         <h3 style="color:#58A6FF;font-size:14px;margin-bottom:10px">Clock Settings</h3>
         <label for="tz">Timezone (DST switches automatically)</label>
-        <select id="tz">
-%TIMEZONE_OPTIONS%
-        </select>
+        <select id="tz"></select>
         <div class="check-row">
           <input type="checkbox" id="use24h" value="1" %USE24H% onchange="toggleSetting('use24h',this.checked)">
           <label for="use24h">24-hour time format</label>
@@ -1341,6 +1339,17 @@ function toggleAfterPrint(){
   row.style.opacity=showClock?'1':'0.4';
 }
 toggleAfterPrint();
+
+// Load timezone list via AJAX (avoids large string replace on low-RAM boards)
+fetch('/api/timezones').then(function(r){return r.json();}).then(function(d){
+  var sel=document.getElementById('tz');
+  for(var i=0;i<d.zones.length;i++){
+    var o=document.createElement('option');
+    o.value=i;o.textContent=d.zones[i];
+    if(i===d.selected) o.selected=true;
+    sel.appendChild(o);
+  }
+}).catch(function(e){console.warn('tz load:',e);});
 </script>
 </body>
 </html>
@@ -1421,22 +1430,7 @@ static void processTemplate(String& page) {
   page.replace("%NET_DNS%", netSettings.dns);
   page.replace("%SHOWIP%", netSettings.showIPAtStartup ? "checked" : "");
 
-  // Timezone dropdown (generated from database, sorted by UTC offset)
-  {
-    size_t tzCount;
-    const TimezoneRegion* regions = getSupportedTimezones(&tzCount);
-    String tzOpts;
-    for (size_t i = 0; i < tzCount; i++) {
-      tzOpts += "          <option value=\"";
-      tzOpts += String((int)i);
-      tzOpts += "\"";
-      if (i == netSettings.timezoneIndex) tzOpts += " selected";
-      tzOpts += ">";
-      tzOpts += regions[i].name;
-      tzOpts += "</option>\n";
-    }
-    page.replace("%TIMEZONE_OPTIONS%", tzOpts);
-  }
+  // Timezone is now loaded via AJAX (/api/timezones) to save RAM on C3
 
   page.replace("%USE24H%", netSettings.use24h ? "checked" : "");
   for (int i = 0; i < 6; i++) {
@@ -1853,6 +1847,25 @@ static void handleStatus() {
   String json;
   serializeJson(doc, json);
   server.send(200, "application/json", json);
+}
+
+static void handleTimezones() {
+  size_t tzCount;
+  const TimezoneRegion* regions = getSupportedTimezones(&tzCount);
+  // Stream JSON directly to avoid building large String
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.send(200, "application/json", "");
+  server.sendContent("{\"selected\":");
+  server.sendContent(String((int)netSettings.timezoneIndex));
+  server.sendContent(",\"zones\":[");
+  for (size_t i = 0; i < tzCount; i++) {
+    if (i > 0) server.sendContent(",");
+    // JSON-encode the name (names don't contain quotes/backslashes)
+    server.sendContent("\"");
+    server.sendContent(regions[i].name);
+    server.sendContent("\"");
+  }
+  server.sendContent("]}");
 }
 
 static void handleReset() {
@@ -2550,6 +2563,7 @@ void initWebServer() {
   server.on("/apply", HTTP_POST, handleApply);
   server.on("/brightness", HTTP_GET, handleBrightnessPreview);
   server.on("/status", HTTP_GET, handleStatus);
+  server.on("/api/timezones", HTTP_GET, handleTimezones);
   server.on("/reset", HTTP_GET, handleReset);
   server.on("/debug", HTTP_GET, handleDebug);
   server.on("/debug/toggle", HTTP_POST, handleDebugToggle);
