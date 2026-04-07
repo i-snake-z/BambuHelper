@@ -10,6 +10,8 @@
 #include "buzzer.h"
 #include "timezones.h"
 #include "tasmota.h"
+#include "clock_mode.h"
+#include "clock_pong.h"
 #include <WebServer.h>
 #include <ArduinoJson.h>
 #include <Update.h>
@@ -258,6 +260,27 @@ R"rawliteral(
 
       <div id="liveStats"></div>
       <button type="button" class="btn btn-primary" onclick="savePrinter()">Save Printer Settings</button>
+
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid #30363D">
+        <h3 style="color:#58A6FF;font-size:14px;margin-bottom:4px">Gauge Layout</h3>
+        <p style="font-size:12px;color:#8B949E;margin-bottom:10px">Choose which widget goes in each of the 6 display positions. Set any slot to <i>Empty</i> to hide it.</p>
+        <p style="font-size:11px;color:#58A6FF;margin-bottom:6px">&#9650; Top row</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">
+          <div><label style="font-size:11px;color:#8B949E">Top-left</label><select id="gs0" class="gauge-slot-sel"></select></div>
+          <div><label style="font-size:11px;color:#8B949E">Top-center</label><select id="gs1" class="gauge-slot-sel"></select></div>
+          <div><label style="font-size:11px;color:#8B949E">Top-right</label><select id="gs2" class="gauge-slot-sel"></select></div>
+        </div>
+        <p style="font-size:11px;color:#58A6FF;margin-bottom:6px">&#9660; Bottom row</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+          <div><label style="font-size:11px;color:#8B949E">Bot-left</label><select id="gs3" class="gauge-slot-sel"></select></div>
+          <div><label style="font-size:11px;color:#8B949E">Bot-center</label><select id="gs4" class="gauge-slot-sel"></select></div>
+          <div><label style="font-size:11px;color:#8B949E">Bot-right</label><select id="gs5" class="gauge-slot-sel"></select></div>
+        </div>
+        <button type="button" style="margin-top:8px;padding:4px 10px;font-size:11px;background:transparent;color:#8B949E;border:1px solid #30363D;border-radius:4px;cursor:pointer" onclick="resetGaugeLayout()">Reset to default</button>
+        <div style="margin-top:12px">
+          <button type="button" class="btn btn-blue" onclick="saveGaugeLayout()">Save Gauge Layout</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -354,9 +377,7 @@ R"rawliteral(
       <div style="margin-top:16px;padding-top:12px;border-top:1px solid #30363D">
         <h3 style="color:#58A6FF;font-size:14px;margin-bottom:10px">Clock Settings</h3>
         <label for="tz">Timezone (DST switches automatically)</label>
-        <select id="tz">
-%TIMEZONE_OPTIONS%
-        </select>
+        <select id="tz"></select>
         <div class="check-row">
           <input type="checkbox" id="use24h" value="1" %USE24H% onchange="toggleSetting('use24h',this.checked)">
           <label for="use24h">24-hour time format</label>
@@ -370,6 +391,10 @@ R"rawliteral(
           <option value="4" %DATEFMT4%>DD MMM YYYY (31 Dec 2025)</option>
           <option value="5" %DATEFMT5%>MMM DD, YYYY (Dec 31, 2025)</option>
         </select>
+        <div class="color-row" style="margin-top:10px">
+          <label>Time color</label><input type="color" id="clk_time" value="%CLK_TIME%">
+          <label>Date color</label><input type="color" id="clk_date" value="%CLK_DATE%">
+        </div>
       </div>
 
       <div style="margin-top:16px;padding-top:12px;border-top:1px solid #30363D">
@@ -423,45 +448,20 @@ R"rawliteral(
           <label>Label</label><input type="color" id="cfn_l" value="%CFN_L%">
           <label>Value</label><input type="color" id="cfn_v" value="%CFN_V%">
         </div></div>
-        <div class="gauge-section"><h3>Clock</h3><div class="color-row">
-          <label>Time</label><input type="color" id="clk_a" value="%CLK_A%">
-          <label>Date</label><input type="color" id="clk_l" value="%CLK_L%">
-          <label>AM/PM</label><input type="color" id="clk_v" value="%CLK_V%">
+        <div class="gauge-section"><h3>Chamber Temp</h3><div class="color-row">
+          <label>Arc</label><input type="color" id="cht_a" value="%CHT_A%">
+          <label>Label</label><input type="color" id="cht_l" value="%CHT_L%">
+          <label>Value</label><input type="color" id="cht_v" value="%CHT_V%">
+        </div></div>
+        <div class="gauge-section"><h3>Heatbreak Fan</h3><div class="color-row">
+          <label>Arc</label><input type="color" id="hbk_a" value="%HBK_A%">
+          <label>Label</label><input type="color" id="hbk_l" value="%HBK_L%">
+          <label>Value</label><input type="color" id="hbk_v" value="%HBK_V%">
         </div></div>
         <div class="gauge-section"><h3>Time Remaining</h3><div class="color-row">
           <label>Number</label><input type="color" id="eta_v" value="%ETA_V%">
           <label>Label</label><input type="color" id="eta_l" value="%ETA_L%">
         </div></div>
-      </div>
-
-      <div style="margin-top:16px;padding-top:12px;border-top:1px solid #30363D">
-        <h3 style="color:#58A6FF;font-size:14px;margin-bottom:4px">Gauge Layout</h3>
-        <p style="font-size:12px;color:#8B949E;margin-bottom:10px">Choose which widget goes in each of the 6 display positions. Set any slot to <em>Empty</em> to hide it.</p>
-        <style>
-          .slot-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px}
-          .slot-grid label{color:#8B949E;font-size:11px;margin:0 0 2px}
-          .slot-grid select{padding:5px 4px;font-size:12px;width:100%;border:1px solid #30363D;border-radius:4px;background:#0D1117;color:#E6EDF3}
-          .slot-row-label{font-size:11px;color:#58A6FF;margin:6px 0 2px;grid-column:1/-1}
-        </style>
-        <div class="slot-grid">
-          <div class="slot-row-label">&#9650; Top row</div>
-          <div><label>Top-left</label>
-            <select id="slot0"><option value="0">&#8212; Empty &#8212;</option><option value="1">Progress</option><option value="2">Nozzle Temp</option><option value="3">Bed Temp</option><option value="4">Part Fan</option><option value="5">Aux Fan</option><option value="6">Chamber Fan</option><option value="7">Time Remaining</option><option value="8">Clock</option></select></div>
-          <div><label>Top-center</label>
-            <select id="slot1"><option value="0">&#8212; Empty &#8212;</option><option value="1">Progress</option><option value="2">Nozzle Temp</option><option value="3">Bed Temp</option><option value="4">Part Fan</option><option value="5">Aux Fan</option><option value="6">Chamber Fan</option><option value="7">Time Remaining</option><option value="8">Clock</option></select></div>
-          <div><label>Top-right</label>
-            <select id="slot2"><option value="0">&#8212; Empty &#8212;</option><option value="1">Progress</option><option value="2">Nozzle Temp</option><option value="3">Bed Temp</option><option value="4">Part Fan</option><option value="5">Aux Fan</option><option value="6">Chamber Fan</option><option value="7">Time Remaining</option><option value="8">Clock</option></select></div>
-          <div class="slot-row-label">&#9660; Bottom row</div>
-          <div><label>Bot-left</label>
-            <select id="slot3"><option value="0">&#8212; Empty &#8212;</option><option value="1">Progress</option><option value="2">Nozzle Temp</option><option value="3">Bed Temp</option><option value="4">Part Fan</option><option value="5">Aux Fan</option><option value="6">Chamber Fan</option><option value="7">Time Remaining</option><option value="8">Clock</option></select></div>
-          <div><label>Bot-center</label>
-            <select id="slot4"><option value="0">&#8212; Empty &#8212;</option><option value="1">Progress</option><option value="2">Nozzle Temp</option><option value="3">Bed Temp</option><option value="4">Part Fan</option><option value="5">Aux Fan</option><option value="6">Chamber Fan</option><option value="7">Time Remaining</option><option value="8">Clock</option></select></div>
-          <div><label>Bot-right</label>
-            <select id="slot5"><option value="0">&#8212; Empty &#8212;</option><option value="1">Progress</option><option value="2">Nozzle Temp</option><option value="3">Bed Temp</option><option value="4">Part Fan</option><option value="5">Aux Fan</option><option value="6">Chamber Fan</option><option value="7">Time Remaining</option><option value="8">Clock</option></select></div>
-        </div>
-        <script>
-          (function(){var sv=[%SLOT0%,%SLOT1%,%SLOT2%,%SLOT3%,%SLOT4%,%SLOT5%];for(var i=0;i<6;i++){var el=document.getElementById('slot'+i);if(el)el.value=sv[i];}})();
-        </script>
       </div>
 
       <button type="button" class="btn btn-blue" onclick="applyDisplay()">Apply Display Settings</button>
@@ -523,6 +523,13 @@ R"rawliteral(
             <span style="color:#8B949E">to</span>
             <input type="number" id="buzqe" min="0" max="23" value="%BUZ_QE%" style="width:60px" placeholder="7">
             <span style="font-size:11px;color:#8B949E">(0-0 = off)</span>
+          </div>
+          <div id="buzClickRow" style="display:none;margin-top:8px">
+            <label style="display:flex;align-items:center;gap:6px;font-weight:normal;cursor:pointer">
+              <input type="checkbox" id="buzclick" %BUZ_CLICK%>
+              Click sound when button pressed
+            </label>
+            <p style="font-size:11px;color:#8B949E;margin-top:2px">Audible feedback for capacitive touch buttons</p>
           </div>
           <button type="button" id="buzTestBtn" class="btn btn-blue" style="margin-top:12px;width:auto;padding:8px 16px"
                   onclick="testBuzzer()">Test: Print Finished</button>
@@ -768,8 +775,40 @@ function toggleSection(id){
   if(saved) toggleSection(saved); else toggleSection('printer');
 })();
 
+// --- Gauge slot type labels ---
+var gaugeTypes=[
+  '-- Empty --','Progress','Nozzle Temp','Bed Temp',
+  'Part Fan','Aux Fan','Chamber Fan','Chamber Temp',
+  'Heatbreak Fan','Clock','Time Remaining'
+];
+(function(){
+  var sels=document.querySelectorAll('.gauge-slot-sel');
+  sels.forEach(function(sel){
+    gaugeTypes.forEach(function(name,i){
+      var o=document.createElement('option');
+      o.value=i;o.textContent=name;
+      sel.appendChild(o);
+    });
+  });
+})();
+
+function resetGaugeLayout(){
+  var d=[1,2,3,4,5,6];
+  for(var i=0;i<6;i++){var s=document.getElementById('gs'+i);if(s)s.value=d[i];}
+}
+function saveGaugeLayout(){
+  var p=new URLSearchParams();
+  p.append('slot',currentSlot);
+  for(var g=0;g<6;g++){var s=document.getElementById('gs'+g);if(s)p.append('gs'+g,s.value);}
+  fetch('/save/gaugelayout',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()})
+    .then(function(r){return r.json();})
+    .then(function(d){if(d.status==='ok')showToast('Gauge layout saved!');else showToast('Error');})
+    .catch(function(){showToast('Save failed');});
+}
+
 // --- Multi-printer tab selection ---
 var currentSlot=0;
+setTimeout(function(){selectPrinterTab(0);},100);
 function selectPrinterTab(slot){
   currentSlot=slot;
   document.querySelectorAll('.tab-btn').forEach(function(btn,i){
@@ -788,6 +827,7 @@ function selectPrinterTab(slot){
     document.getElementById('cl_pname').value=d.name||'';
     document.getElementById('region').value=d.region||'us';
     document.getElementById('cl_token').value='';
+    if(d.gaugeSlots){for(var g=0;g<6;g++){var sel=document.getElementById('gs'+g);if(sel)sel.value=d.gaugeSlots[g]||0;}}
     toggleConnMode();
     var ps=document.getElementById('printerStatus');
     if(d.connected){ps.className='status status-ok';ps.textContent='Connected';}
@@ -878,12 +918,15 @@ function toggleBtnPin(){
   var v=document.getElementById('btntype').value;
   document.getElementById('btnPinRow').style.display=
     (v==='0'||v==='3')?'none':'block';
+  toggleBuzPin();
 }
 toggleBtnPin();
 
 function toggleBuzPin(){
-  document.getElementById('buzFields').style.display=
-    document.getElementById('buzzen').value==='0'?'none':'block';
+  var buzOn=document.getElementById('buzzen').value!=='0';
+  document.getElementById('buzFields').style.display=buzOn?'block':'none';
+  var btnOn=document.getElementById('btntype').value!=='0';
+  document.getElementById('buzClickRow').style.display=(buzOn&&btnOn)?'block':'none';
 }
 toggleBuzPin();
 
@@ -914,6 +957,7 @@ function saveRotation(){
   p.append('buzpin',document.getElementById('buzpin').value);
   p.append('buzqs',document.getElementById('buzqs').value);
   p.append('buzqe',document.getElementById('buzqe').value);
+  p.append('buzclick',document.getElementById('buzclick').checked?'1':'0');
   fetch('/save/rotation',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()})
     .then(function(r){return r.json();})
     .then(function(d){if(d.status==='ok') showToast('Settings saved');})
@@ -937,39 +981,47 @@ function savePower(){
 
 // --- Display ---
 var themes={
-  default:{bg:'#081018',track:'#182028',
+  default:{bg:'#081018',track:'#182028',clkt:'#FFFFFF',clkd:'#C0C0C0',
     prg:{a:'#00FF00',l:'#00FF00',v:'#FFFFFF'},noz:{a:'#FFA500',l:'#FFA500',v:'#FFFFFF'},
     bed:{a:'#00FFFF',l:'#00FFFF',v:'#FFFFFF'},pfn:{a:'#00FFFF',l:'#00FFFF',v:'#FFFFFF'},
-    afn:{a:'#FFA500',l:'#FFA500',v:'#FFFFFF'},cfn:{a:'#00FF00',l:'#00FF00',v:'#FFFFFF'}},
-  mono_green:{bg:'#000800',track:'#0A1A0A',
+    afn:{a:'#FFA500',l:'#FFA500',v:'#FFFFFF'},cfn:{a:'#00FF00',l:'#00FF00',v:'#FFFFFF'},
+    cht:{a:'#00FFFF',l:'#00FFFF',v:'#FFFFFF'},hbk:{a:'#FFA500',l:'#FFA500',v:'#FFFFFF'}},
+  mono_green:{bg:'#000800',track:'#0A1A0A',clkt:'#00FF41',clkd:'#00CC33',
     prg:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},noz:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},
     bed:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},pfn:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},
-    afn:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},cfn:{a:'#00FF41',l:'#00CC33',v:'#00FF41'}},
-  neon:{bg:'#0A0014',track:'#1A0A2E',
+    afn:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},cfn:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},
+    cht:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},hbk:{a:'#00FF41',l:'#00CC33',v:'#00FF41'}},
+  neon:{bg:'#0A0014',track:'#1A0A2E',clkt:'#FF00FF',clkd:'#AA00FF',
     prg:{a:'#FF00FF',l:'#FF00FF',v:'#FFFFFF'},noz:{a:'#FF4400',l:'#FF6600',v:'#FFFFFF'},
     bed:{a:'#00FFFF',l:'#00FFFF',v:'#FFFFFF'},pfn:{a:'#00FF88',l:'#00FF88',v:'#FFFFFF'},
-    afn:{a:'#FFFF00',l:'#FFFF00',v:'#FFFFFF'},cfn:{a:'#FF00FF',l:'#FF00FF',v:'#FFFFFF'}},
-  warm:{bg:'#140A00',track:'#2E1A08',
+    afn:{a:'#FFFF00',l:'#FFFF00',v:'#FFFFFF'},cfn:{a:'#FF00FF',l:'#FF00FF',v:'#FFFFFF'},
+    cht:{a:'#00FFFF',l:'#00FFFF',v:'#FFFFFF'},hbk:{a:'#FF4400',l:'#FF6600',v:'#FFFFFF'}},
+  warm:{bg:'#140A00',track:'#2E1A08',clkt:'#FFEEDD',clkd:'#FFB347',
     prg:{a:'#FFB347',l:'#FFB347',v:'#FFEEDD'},noz:{a:'#FF6347',l:'#FF6347',v:'#FFEEDD'},
     bed:{a:'#FFA500',l:'#FFA500',v:'#FFEEDD'},pfn:{a:'#FFD700',l:'#FFD700',v:'#FFEEDD'},
-    afn:{a:'#FF8C00',l:'#FF8C00',v:'#FFEEDD'},cfn:{a:'#FFB347',l:'#FFB347',v:'#FFEEDD'}},
-  ocean:{bg:'#000A14',track:'#0A1A2E',
+    afn:{a:'#FF8C00',l:'#FF8C00',v:'#FFEEDD'},cfn:{a:'#FFB347',l:'#FFB347',v:'#FFEEDD'},
+    cht:{a:'#FFA500',l:'#FFA500',v:'#FFEEDD'},hbk:{a:'#FF8C00',l:'#FF8C00',v:'#FFEEDD'}},
+  ocean:{bg:'#000A14',track:'#0A1A2E',clkt:'#E0F0FF',clkd:'#00BFFF',
     prg:{a:'#00BFFF',l:'#00BFFF',v:'#E0F0FF'},noz:{a:'#FF7F50',l:'#FF7F50',v:'#E0F0FF'},
     bed:{a:'#4169E1',l:'#4169E1',v:'#E0F0FF'},pfn:{a:'#00CED1',l:'#00CED1',v:'#E0F0FF'},
-    afn:{a:'#48D1CC',l:'#48D1CC',v:'#E0F0FF'},cfn:{a:'#20B2AA',l:'#20B2AA',v:'#E0F0FF'}}
+    afn:{a:'#48D1CC',l:'#48D1CC',v:'#E0F0FF'},cfn:{a:'#20B2AA',l:'#20B2AA',v:'#E0F0FF'},
+    cht:{a:'#4169E1',l:'#4169E1',v:'#E0F0FF'},hbk:{a:'#FF7F50',l:'#FF7F50',v:'#E0F0FF'}}
 };
 
 function applyTheme(name){
   var t=themes[name]; if(!t) return;
   document.getElementById('clr_bg').value=t.bg;
   document.getElementById('clr_track').value=t.track;
-  var g=['prg','noz','bed','pfn','afn','cfn'];
+  document.getElementById('clk_time').value=t.clkt;
+  document.getElementById('clk_date').value=t.clkd;
+  var g=['prg','noz','bed','pfn','afn','cfn','cht','hbk'];
   for(var i=0;i<g.length;i++){
     var c=t[g[i]];
     document.getElementById(g[i]+'_a').value=c.a;
     document.getElementById(g[i]+'_l').value=c.l;
     document.getElementById(g[i]+'_v').value=c.v;
   }
+  applyDisplay();
 }
 
 function applyDisplay(){
@@ -994,7 +1046,9 @@ function applyDisplay(){
   p.append('datefmt',document.getElementById('datefmt').value);
   p.append('clr_bg',document.getElementById('clr_bg').value);
   p.append('clr_track',document.getElementById('clr_track').value);
-  var g=['prg','noz','bed','pfn','afn','cfn','clk'];
+  p.append('clk_time',document.getElementById('clk_time').value);
+  p.append('clk_date',document.getElementById('clk_date').value);
+  var g=['prg','noz','bed','pfn','afn','cfn','cht','hbk'];
   for(var i=0;i<g.length;i++){
     p.append(g[i]+'_a',document.getElementById(g[i]+'_a').value);
     p.append(g[i]+'_l',document.getElementById(g[i]+'_l').value);
@@ -1108,7 +1162,7 @@ function startOta(){
   if(!f){showToast('Select a .bin file first');return;}
   if(!f.name.endsWith('.bin')){showToast('File must be .bin');return;}
   if(f.size<32768){showToast('File too small');return;}
-  if(f.size>1310720){showToast('File too large (max 1.25MB)');return;}
+  if(f.size>1835008){showToast('File too large (max 1.75MB)');return;}
   if(!confirm('Upload firmware and restart?')) return;
   var prog=document.getElementById('otaProgress');
   var bar=document.getElementById('otaBar');
@@ -1315,255 +1369,340 @@ function toggleAfterPrint(){
   sel.style.opacity=showClock?'1':'0.4';
 }
 toggleAfterPrint();
+
+// Load timezone list via AJAX (avoids large string replace on low-RAM boards)
+fetch('/api/timezones').then(function(r){return r.json();}).then(function(d){
+  var sel=document.getElementById('tz');
+  for(var i=0;i<d.zones.length;i++){
+    var o=document.createElement('option');
+    o.value=i;o.textContent=d.zones[i];
+    if(i===d.selected) o.selected=true;
+    sel.appendChild(o);
+  }
+}).catch(function(e){console.warn('tz load:',e);});
 </script>
 </body>
 </html>
 )rawliteral";
 
 // ---------------------------------------------------------------------------
-//  Helper: replace gauge color placeholders
+//  Resolve a single template placeholder to its value.
+//  Returns true if name was a known placeholder (even if value is empty).
 // ---------------------------------------------------------------------------
-static void replaceGaugeColors(String& page, const char* prefix, const GaugeColors& gc) {
-  char buf[8];
-  char placeholder[12];
-
-  snprintf(placeholder, sizeof(placeholder), "%%%s_A%%", prefix);
-  rgb565ToHtml(gc.arc, buf);
-  page.replace(placeholder, buf);
-
-  snprintf(placeholder, sizeof(placeholder), "%%%s_L%%", prefix);
-  rgb565ToHtml(gc.label, buf);
-  page.replace(placeholder, buf);
-
-  snprintf(placeholder, sizeof(placeholder), "%%%s_V%%", prefix);
-  rgb565ToHtml(gc.value, buf);
-  page.replace(placeholder, buf);
-}
-
-// ---------------------------------------------------------------------------
-//  Template processor
-// ---------------------------------------------------------------------------
-static void processTemplate(String& page) {
+static bool resolvePlaceholder(const char* name, String& out) {
   PrinterConfig& cfg = printers[0].config;
   BambuState& st = printers[0].state;
+  char buf[8];
 
-  page.replace("%SSID%", wifiSSID);
-  page.replace("%MODE_LOCAL%", cfg.mode == CONN_LOCAL ? "selected" : "");
-  page.replace("%MODE_CLOUD_ALL%", isCloudMode(cfg.mode) ? "selected" : "");
-  page.replace("%PNAME%", cfg.name);
-  page.replace("%IP%", cfg.ip);
-  page.replace("%SERIAL%", cfg.serial);
-  // Cloud region dropdown
-  page.replace("%REGION_US%", cfg.region == REGION_US ? "selected" : "");
-  page.replace("%REGION_EU%", cfg.region == REGION_EU ? "selected" : "");
-  page.replace("%REGION_CN%", cfg.region == REGION_CN ? "selected" : "");
-
-  // Cloud status text
-  {
+  // --- Printer ---
+  if (strcmp(name, "SSID") == 0)           { out = wifiSSID; return true; }
+  if (strcmp(name, "MODE_LOCAL") == 0)      { out = cfg.mode == CONN_LOCAL ? "selected" : ""; return true; }
+  if (strcmp(name, "MODE_CLOUD_ALL") == 0)  { out = isCloudMode(cfg.mode) ? "selected" : ""; return true; }
+  if (strcmp(name, "PNAME") == 0)           { out = cfg.name; return true; }
+  if (strcmp(name, "IP") == 0)              { out = cfg.ip; return true; }
+  if (strcmp(name, "SERIAL") == 0)          { out = cfg.serial; return true; }
+  if (strcmp(name, "REGION_US") == 0)       { out = cfg.region == REGION_US ? "selected" : ""; return true; }
+  if (strcmp(name, "REGION_EU") == 0)       { out = cfg.region == REGION_EU ? "selected" : ""; return true; }
+  if (strcmp(name, "REGION_CN") == 0)       { out = cfg.region == REGION_CN ? "selected" : ""; return true; }
+  if (strcmp(name, "CLOUD_STATUS") == 0) {
     char tokenBuf[32];
     bool hasToken = loadCloudToken(tokenBuf, sizeof(tokenBuf));
-    page.replace("%CLOUD_STATUS%", hasToken ? "Token active" : "No token set");
+    out = hasToken ? "Token active" : "No token set";
+    return true;
   }
-  page.replace("%BRIGHT%", String(brightness));
 
-  // Night mode
-  page.replace("%NIGHTEN%", dpSettings.nightModeEnabled ? "checked" : "");
-  page.replace("%NIGHTDISP%", dpSettings.nightModeEnabled ? "block" : "none");
-  page.replace("%NBRIGHT%", String(dpSettings.nightBrightness));
-  page.replace("%SSBRIGHT%", String(dpSettings.screensaverBrightness));
-  {
-    String startOpts, endOpts;
+  // --- Brightness / Night mode ---
+  if (strcmp(name, "BRIGHT") == 0)          { out = String(brightness); return true; }
+  if (strcmp(name, "NIGHTEN") == 0)         { out = dpSettings.nightModeEnabled ? "checked" : ""; return true; }
+  if (strcmp(name, "NIGHTDISP") == 0)       { out = dpSettings.nightModeEnabled ? "block" : "none"; return true; }
+  if (strcmp(name, "NBRIGHT") == 0)         { out = String(dpSettings.nightBrightness); return true; }
+  if (strcmp(name, "SSBRIGHT") == 0)        { out = String(dpSettings.screensaverBrightness); return true; }
+  if (strcmp(name, "NIGHT_START_OPTS") == 0) {
+    out = "";
     for (uint8_t h = 0; h < 24; h++) {
       char opt[64];
       snprintf(opt, sizeof(opt), "<option value=\"%d\"%s>%02d:00</option>",
                h, h == dpSettings.nightStartHour ? " selected" : "", h);
-      startOpts += opt;
+      out += opt;
+    }
+    return true;
+  }
+  if (strcmp(name, "NIGHT_END_OPTS") == 0) {
+    out = "";
+    for (uint8_t h = 0; h < 24; h++) {
+      char opt[64];
       snprintf(opt, sizeof(opt), "<option value=\"%d\"%s>%02d:00</option>",
                h, h == dpSettings.nightEndHour ? " selected" : "", h);
-      endOpts += opt;
+      out += opt;
     }
-    page.replace("%NIGHT_START_OPTS%", startOpts);
-    page.replace("%NIGHT_END_OPTS%", endOpts);
+    return true;
   }
 
-  // Network settings
-  page.replace("%NET_DHCP%", netSettings.useDHCP ? "selected" : "");
-  page.replace("%NET_STATIC%", netSettings.useDHCP ? "" : "selected");
-  page.replace("%NET_IP%", netSettings.staticIP);
-  page.replace("%NET_GW%", netSettings.gateway);
-  page.replace("%NET_SN%", netSettings.subnet);
-  page.replace("%NET_DNS%", netSettings.dns);
-  page.replace("%SHOWIP%", netSettings.showIPAtStartup ? "checked" : "");
+  // --- Network ---
+  if (strcmp(name, "NET_DHCP") == 0)   { out = netSettings.useDHCP ? "selected" : ""; return true; }
+  if (strcmp(name, "NET_STATIC") == 0) { out = netSettings.useDHCP ? "" : "selected"; return true; }
+  if (strcmp(name, "NET_IP") == 0)     { out = netSettings.staticIP; return true; }
+  if (strcmp(name, "NET_GW") == 0)     { out = netSettings.gateway; return true; }
+  if (strcmp(name, "NET_SN") == 0)     { out = netSettings.subnet; return true; }
+  if (strcmp(name, "NET_DNS") == 0)    { out = netSettings.dns; return true; }
+  if (strcmp(name, "SHOWIP") == 0)     { out = netSettings.showIPAtStartup ? "checked" : ""; return true; }
 
-  // Timezone dropdown (generated from database, sorted by UTC offset)
-  {
-    size_t tzCount;
-    const TimezoneRegion* regions = getSupportedTimezones(&tzCount);
-    String tzOpts;
-    for (size_t i = 0; i < tzCount; i++) {
-      tzOpts += "          <option value=\"";
-      tzOpts += String((int)i);
-      tzOpts += "\"";
-      if (i == netSettings.timezoneIndex) tzOpts += " selected";
-      tzOpts += ">";
-      tzOpts += regions[i].name;
-      tzOpts += "</option>\n";
-    }
-    page.replace("%TIMEZONE_OPTIONS%", tzOpts);
+  // --- Clock ---
+  if (strcmp(name, "USE24H") == 0)     { out = netSettings.use24h ? "checked" : ""; return true; }
+  // DATEFMT0..DATEFMT5
+  if (strncmp(name, "DATEFMT", 7) == 0 && name[7] >= '0' && name[7] <= '5' && name[8] == '\0') {
+    out = netSettings.dateFormat == (name[7] - '0') ? "selected" : "";
+    return true;
   }
 
-  page.replace("%USE24H%", netSettings.use24h ? "checked" : "");
-  for (int i = 0; i < 6; i++) {
-    char ph[12]; snprintf(ph, sizeof(ph), "%%DATEFMT%d%%", i);
-    page.replace(ph, netSettings.dateFormat == i ? "selected" : "");
+  // --- Display rotation ---
+  if (strncmp(name, "ROT", 3) == 0 && name[3] >= '0' && name[3] <= '3' && name[4] == '\0') {
+    out = dispSettings.rotation == (name[3] - '0') ? "selected" : "";
+    return true;
   }
 
-  // Rotation dropdown
-  page.replace("%ROT0%", dispSettings.rotation == 0 ? "selected" : "");
-  page.replace("%ROT1%", dispSettings.rotation == 1 ? "selected" : "");
-  page.replace("%ROT2%", dispSettings.rotation == 2 ? "selected" : "");
-  page.replace("%ROT3%", dispSettings.rotation == 3 ? "selected" : "");
-
-  // Display power
-  // After-print dropdown: determine which option is selected
+  // --- After-print ---
   {
     uint16_t fm = dpSettings.finishDisplayMins;
     bool keepon = dpSettings.keepDisplayOn;
     bool isPreset = (!keepon && (fm == 0 || fm == 1 || fm == 3 || fm == 5 || fm == 10));
-    page.replace("%AP_CLOCK0%", (!keepon && fm == 0) ? "selected" : "");
-    page.replace("%AP_F1%",     (!keepon && fm == 1) ? "selected" : "");
-    page.replace("%AP_F3%",     (!keepon && fm == 3) ? "selected" : "");
-    page.replace("%AP_F5%",     (!keepon && fm == 5) ? "selected" : "");
-    page.replace("%AP_F10%",    (!keepon && fm == 10) ? "selected" : "");
-    page.replace("%AP_CUSTOM%", (!keepon && !isPreset && fm > 0) ? "selected" : "");
-    page.replace("%AP_KEEPON%", keepon ? "selected" : "");
-    page.replace("%CUSTOM_DISP%", (!keepon && !isPreset && fm > 0) ? "block" : "none");
-    page.replace("%FMINS%", String(fm));
-  }
-  page.replace("%DACK%", dpSettings.doorAckEnabled ? "checked" : "");
-  page.replace("%ABAR%", dispSettings.animatedBar ? "checked" : "");
-  page.replace("%SCRSVR_NONE%",  (!dispSettings.pongClock && !dispSettings.snakeClock && !dispSettings.pacmanClock) ? "selected" : "");
-  page.replace("%SCRSVR_PONG%",  dispSettings.pongClock  ? "selected" : "");
-  page.replace("%SCRSVR_SNAKE%", dispSettings.snakeClock ? "selected" : "");
-  page.replace("%SCRSVR_PACMAN%", dispSettings.pacmanClock ? "selected" : "");
-  page.replace("%SLBL%", dispSettings.smallLabels ? "checked" : "");
-
-  // Gauge layout slot values (injected as JS array for the selects)
-  for (int i = 0; i < GAUGE_SLOT_COUNT; i++) {
-    String key = "%SLOT"; key += i; key += "%";
-    page.replace(key, String(dispSettings.gaugeSlots[i]));
+    if (strcmp(name, "AP_CLOCK0") == 0)    { out = (!keepon && fm == 0) ? "selected" : ""; return true; }
+    if (strcmp(name, "AP_F1") == 0)        { out = (!keepon && fm == 1) ? "selected" : ""; return true; }
+    if (strcmp(name, "AP_F3") == 0)        { out = (!keepon && fm == 3) ? "selected" : ""; return true; }
+    if (strcmp(name, "AP_F5") == 0)        { out = (!keepon && fm == 5) ? "selected" : ""; return true; }
+    if (strcmp(name, "AP_F10") == 0)       { out = (!keepon && fm == 10) ? "selected" : ""; return true; }
+    if (strcmp(name, "AP_CUSTOM") == 0)    { out = (!keepon && !isPreset && fm > 0) ? "selected" : ""; return true; }
+    if (strcmp(name, "AP_KEEPON") == 0)    { out = keepon ? "selected" : ""; return true; }
+    if (strcmp(name, "CUSTOM_DISP") == 0)  { out = (!keepon && !isPreset && fm > 0) ? "block" : "none"; return true; }
+    if (strcmp(name, "FMINS") == 0)        { out = String(fm); return true; }
   }
 
+  // --- Display options ---
+  if (strcmp(name, "DACK") == 0)  { out = dpSettings.doorAckEnabled ? "checked" : ""; return true; }
+  if (strcmp(name, "ABAR") == 0)  { out = dispSettings.animatedBar ? "checked" : ""; return true; }
+  if (strcmp(name, "PONG") == 0)  { out = dispSettings.pongClock ? "checked" : ""; return true; }
+  if (strcmp(name, "SNAKE") == 0) { out = dispSettings.snakeClock ? "checked" : ""; return true; }
+  if (strcmp(name, "PACMAN") == 0){ out = dispSettings.pacmanClock ? "checked" : ""; return true; }
+  if (strcmp(name, "SLBL") == 0)  { out = dispSettings.smallLabels ? "checked" : ""; return true; }
+  if (strcmp(name, "INVCOL_ROW") == 0) {
 #if defined(DISPLAY_CYD)
-  {
-    String row = "<div class=\"check-row\">"
+    out = "<div class=\"check-row\">"
       "<input type=\"checkbox\" id=\"invcol\" value=\"1\" ";
-    row += dispSettings.invertColors ? "checked" : "";
-    row += " onchange=\"toggleSetting('invcol',this.checked)\">"
+    out += dispSettings.invertColors ? "checked" : "";
+    out += " onchange=\"toggleSetting('invcol',this.checked)\">"
       "<label for=\"invcol\">Invert display colors (fix white background)</label>"
       "</div>";
-    page.replace("%INVCOL_ROW%", row);
-  }
 #else
-  page.replace("%INVCOL_ROW%", "");
+    out = "";
 #endif
-
-  // Global colors
-  char buf[8];
-  rgb565ToHtml(dispSettings.bgColor, buf);
-  page.replace("%CLR_BG%", buf);
-  rgb565ToHtml(dispSettings.trackColor, buf);
-  page.replace("%CLR_TRACK%", buf);
-
-  // Per-gauge colors
-  replaceGaugeColors(page, "PRG", dispSettings.progress);
-  replaceGaugeColors(page, "NOZ", dispSettings.nozzle);
-  replaceGaugeColors(page, "BED", dispSettings.bed);
-  replaceGaugeColors(page, "PFN", dispSettings.partFan);
-  replaceGaugeColors(page, "AFN", dispSettings.auxFan);
-  replaceGaugeColors(page, "CFN", dispSettings.chamberFan);
-  replaceGaugeColors(page, "CLK", dispSettings.clock);
-  replaceGaugeColors(page, "ETA", dispSettings.eta);
-
-  page.replace("%DBGLOG%", mqttDebugLog ? "checked" : "");
-  page.replace("%FW_VER%", FW_VERSION);
-  page.replace("%BOARD%", BOARD_VARIANT);
-
-  if (st.connected) {
-    page.replace("%STATUS_CLASS%", "status status-ok");
-    page.replace("%STATUS_TEXT%", "Connected");
-  } else if (isPrinterConfigured(0)) {
-    page.replace("%STATUS_CLASS%", "status status-off");
-    page.replace("%STATUS_TEXT%", "Disconnected");
-  } else {
-    page.replace("%STATUS_CLASS%", "status status-na");
-    page.replace("%STATUS_TEXT%", "Not configured");
+    return true;
   }
 
-  // Rotation mode (multi-printer)
-  page.replace("%RMODE_OFF%", rotState.mode == ROTATE_OFF ? "selected" : "");
-  page.replace("%RMODE_AUTO%", rotState.mode == ROTATE_AUTO ? "selected" : "");
-  page.replace("%RMODE_SMART%", rotState.mode == ROTATE_SMART ? "selected" : "");
-  page.replace("%ROT_INTERVAL%", String(rotState.intervalMs / 1000));
+  // --- Colors (global + per-gauge) ---
+  if (strcmp(name, "CLR_BG") == 0)    { rgb565ToHtml(dispSettings.bgColor, buf); out = buf; return true; }
+  if (strcmp(name, "CLR_TRACK") == 0) { rgb565ToHtml(dispSettings.trackColor, buf); out = buf; return true; }
+  if (strcmp(name, "CLK_TIME") == 0)  { rgb565ToHtml(dispSettings.clockTimeColor, buf); out = buf; return true; }
+  if (strcmp(name, "CLK_DATE") == 0)  { rgb565ToHtml(dispSettings.clockDateColor, buf); out = buf; return true; }
 
-  // Button settings
-  page.replace("%BTN_OFF%", buttonType == BTN_DISABLED ? "selected" : "");
-  page.replace("%BTN_PUSH%", buttonType == BTN_PUSH ? "selected" : "");
-  page.replace("%BTN_TOUCH%", buttonType == BTN_TOUCH ? "selected" : "");
-  page.replace("%BTN_SCREEN%", buttonType == BTN_TOUCHSCREEN ? "selected" : "");
-  page.replace("%BTN_PIN%", String(buttonPin));
-  page.replace("%BTN_CYCLE_CLOCK%", btnCycleClock ? "checked" : "");
-
-  // Buzzer settings
-  page.replace("%BUZ_OFF%", buzzerSettings.enabled ? "" : "selected");
-  page.replace("%BUZ_ON%", buzzerSettings.enabled ? "selected" : "");
-  page.replace("%BUZ_PIN%", String(buzzerSettings.pin));
-  page.replace("%BUZ_QS%", String(buzzerSettings.quietStartHour));
-  page.replace("%BUZ_QE%", String(buzzerSettings.quietEndHour));
-
-  // Tasmota power monitoring
-  page.replace("%TSM_EN%", tasmotaSettings.enabled ? "checked" : "");
-  page.replace("%TSM_IP%", tasmotaSettings.ip);
-  page.replace("%TSM_DM0%", tasmotaSettings.displayMode == 0 ? "checked" : "");
-  page.replace("%TSM_DM1%", tasmotaSettings.displayMode == 1 ? "checked" : "");
-  // Tasmota slot dropdown (dynamic, based on configured printers)
+  // Per-gauge: PRG_A, PRG_L, PRG_V, NOZ_A, etc.
   {
-    String slotOpts;
-    slotOpts += "<option value=\"255\"";
-    if (tasmotaSettings.assignedSlot == 255) slotOpts += " selected";
-    slotOpts += ">Any printer</option>";
+    static const struct { const char* prefix; const GaugeColors* gc; } gauges[] = {
+      {"PRG", &dispSettings.progress}, {"NOZ", &dispSettings.nozzle},
+      {"BED", &dispSettings.bed},      {"PFN", &dispSettings.partFan},
+      {"AFN", &dispSettings.auxFan},   {"CFN", &dispSettings.chamberFan},
+      {"CHT", &dispSettings.chamberTemp}, {"HBK", &dispSettings.heatbreak},
+      {"ETA", &dispSettings.eta},
+    };
+    for (auto& g : gauges) {
+      size_t plen = strlen(g.prefix);
+      if (strncmp(name, g.prefix, plen) == 0 && name[plen] == '_' && name[plen+2] == '\0') {
+        char suffix = name[plen+1];
+        if (suffix == 'A')      rgb565ToHtml(g.gc->arc, buf);
+        else if (suffix == 'L') rgb565ToHtml(g.gc->label, buf);
+        else if (suffix == 'V') rgb565ToHtml(g.gc->value, buf);
+        else continue;
+        out = buf;
+        return true;
+      }
+    }
+  }
+
+  // --- Status ---
+  if (strcmp(name, "DBGLOG") == 0)  { out = mqttDebugLog ? "checked" : ""; return true; }
+  if (strcmp(name, "FW_VER") == 0)  { out = FW_VERSION; return true; }
+  if (strcmp(name, "BOARD") == 0)   { out = BOARD_VARIANT; return true; }
+  if (strcmp(name, "STATUS_CLASS") == 0) {
+    out = st.connected ? "status status-ok" : isPrinterConfigured(0) ? "status status-off" : "status status-na";
+    return true;
+  }
+  if (strcmp(name, "STATUS_TEXT") == 0) {
+    out = st.connected ? "Connected" : isPrinterConfigured(0) ? "Disconnected" : "Not configured";
+    return true;
+  }
+
+  // --- Multi-printer rotation ---
+  if (strcmp(name, "RMODE_OFF") == 0)   { out = rotState.mode == ROTATE_OFF ? "selected" : ""; return true; }
+  if (strcmp(name, "RMODE_AUTO") == 0)  { out = rotState.mode == ROTATE_AUTO ? "selected" : ""; return true; }
+  if (strcmp(name, "RMODE_SMART") == 0) { out = rotState.mode == ROTATE_SMART ? "selected" : ""; return true; }
+  if (strcmp(name, "ROT_INTERVAL") == 0){ out = String(rotState.intervalMs / 1000); return true; }
+
+  // --- Button ---
+  if (strcmp(name, "BTN_OFF") == 0)    { out = buttonType == BTN_DISABLED ? "selected" : ""; return true; }
+  if (strcmp(name, "BTN_PUSH") == 0)   { out = buttonType == BTN_PUSH ? "selected" : ""; return true; }
+  if (strcmp(name, "BTN_TOUCH") == 0)  { out = buttonType == BTN_TOUCH ? "selected" : ""; return true; }
+  if (strcmp(name, "BTN_SCREEN") == 0) { out = buttonType == BTN_TOUCHSCREEN ? "selected" : ""; return true; }
+  if (strcmp(name, "BTN_PIN") == 0)    { out = String(buttonPin); return true; }
+
+  // --- Buzzer ---
+  if (strcmp(name, "BUZ_OFF") == 0) { out = buzzerSettings.enabled ? "" : "selected"; return true; }
+  if (strcmp(name, "BUZ_ON") == 0)  { out = buzzerSettings.enabled ? "selected" : ""; return true; }
+  if (strcmp(name, "BUZ_PIN") == 0) { out = String(buzzerSettings.pin); return true; }
+  if (strcmp(name, "BUZ_QS") == 0)  { out = String(buzzerSettings.quietStartHour); return true; }
+  if (strcmp(name, "BUZ_QE") == 0)  { out = String(buzzerSettings.quietEndHour); return true; }
+  if (strcmp(name, "BUZ_CLICK") == 0) { out = buzzerSettings.buttonClick ? "checked" : ""; return true; }
+
+  // --- Tasmota ---
+  if (strcmp(name, "TSM_EN") == 0)  { out = tasmotaSettings.enabled ? "checked" : ""; return true; }
+  if (strcmp(name, "TSM_IP") == 0)  { out = tasmotaSettings.ip; return true; }
+  if (strcmp(name, "TSM_DM0") == 0) { out = tasmotaSettings.displayMode == 0 ? "checked" : ""; return true; }
+  if (strcmp(name, "TSM_DM1") == 0) { out = tasmotaSettings.displayMode == 1 ? "checked" : ""; return true; }
+  if (strcmp(name, "TSM_SLOT_OPTIONS") == 0) {
+    out = "<option value=\"255\"";
+    if (tasmotaSettings.assignedSlot == 255) out += " selected";
+    out += ">Any printer</option>";
     for (uint8_t i = 0; i < MAX_ACTIVE_PRINTERS; i++) {
       if (!isPrinterConfigured(i)) continue;
-      slotOpts += "<option value=\"";
-      slotOpts += String(i);
-      slotOpts += "\"";
-      if (tasmotaSettings.assignedSlot == i) slotOpts += " selected";
-      slotOpts += ">";
+      out += "<option value=\"";
+      out += String(i);
+      out += "\"";
+      if (tasmotaSettings.assignedSlot == i) out += " selected";
+      out += ">";
       const char* nm = printers[i].config.name;
-      if (nm[0] != '\0') slotOpts += nm;
-      else { slotOpts += "Printer "; slotOpts += String(i + 1); }
-      slotOpts += "</option>";
+      if (nm[0] != '\0') out += nm;
+      else { out += "Printer "; out += String(i + 1); }
+      out += "</option>";
     }
-    page.replace("%TSM_SLOT_OPTIONS%", slotOpts);
+    return true;
   }
-  // Tasmota poll interval dropdown
-  {
+  if (strcmp(name, "TSM_PI_OPTIONS") == 0) {
     static const uint8_t intervals[] = {10, 15, 20, 30, 60};
     static const char* const labels[] = {"10 seconds", "15 seconds", "20 seconds", "30 seconds", "60 seconds"};
     uint8_t cur = tasmotaSettings.pollInterval > 0 ? tasmotaSettings.pollInterval : 10;
-    String piOpts;
+    out = "";
     for (int i = 0; i < 5; i++) {
-      piOpts += "<option value=\"";
-      piOpts += String(intervals[i]);
-      piOpts += "\"";
-      if (cur == intervals[i]) piOpts += " selected";
-      piOpts += ">";
-      piOpts += labels[i];
-      piOpts += "</option>";
+      out += "<option value=\"";
+      out += String(intervals[i]);
+      out += "\"";
+      if (cur == intervals[i]) out += " selected";
+      out += ">";
+      out += labels[i];
+      out += "</option>";
     }
-    page.replace("%TSM_PI_OPTIONS%", piOpts);
+    return true;
   }
 
+  return false;  // unknown placeholder
+}
+
+// ---------------------------------------------------------------------------
+//  Stream the HTML template from PROGMEM, resolving placeholders on the fly.
+//  All output (literal HTML + placeholder values) goes into a single buffer;
+//  sendContent() is called only when the buffer fills up, minimizing TCP writes.
+// ---------------------------------------------------------------------------
+static void streamTemplate() {
+  static const size_t BUF_SIZE = 2048;
+  char* buf = (char*)malloc(BUF_SIZE + 1);
+  if (!buf) {
+    server.send(503, "text/plain", "Out of memory");
+    return;
+  }
+  size_t bufLen = 0;
+
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  server.send(200, "text/html", "");
+
+  // Flush buffer to client
+  auto flush = [&]() {
+    if (bufLen > 0) {
+      buf[bufLen] = '\0';
+      server.sendContent(buf);
+      bufLen = 0;
+    }
+  };
+
+  // Append data to buffer, flushing when full
+  auto emit = [&](const char* data, size_t len) {
+    while (len > 0) {
+      size_t space = BUF_SIZE - bufLen;
+      size_t n = len < space ? len : space;
+      memcpy(buf + bufLen, data, n);
+      bufLen += n;
+      data += n;
+      len -= n;
+      if (bufLen >= BUF_SIZE) flush();
+    }
+  };
+
+  // On ESP32, PROGMEM is directly memory-mapped and readable as const char*.
+  const char* tmpl = PAGE_HTML;
+  const char* end = tmpl + sizeof(PAGE_HTML) - 1;
+  const char* pos = tmpl;
+  const char* literalStart = tmpl;
+
+  while (pos < end) {
+    // Look for '%' - potential placeholder start
+    if (*pos != '%') { pos++; continue; }
+
+    // Check if next char is uppercase letter (all our placeholders start A-Z)
+    if (pos + 1 >= end || !(pos[1] >= 'A' && pos[1] <= 'Z')) {
+      pos++;
+      continue;
+    }
+
+    // Find closing '%'
+    const char* pEnd = pos + 2;
+    while (pEnd < end && *pEnd != '%' && *pEnd != '\n' && (pEnd - pos) < 30) pEnd++;
+    if (pEnd >= end || *pEnd != '%') { pos++; continue; }
+
+    // Validate: all chars between %...% must be [A-Z0-9_]
+    bool valid = true;
+    for (const char* c = pos + 1; c < pEnd; c++) {
+      if (!((*c >= 'A' && *c <= 'Z') || (*c >= '0' && *c <= '9') || *c == '_')) {
+        valid = false;
+        break;
+      }
+    }
+    if (!valid) { pos++; continue; }
+
+    // Extract placeholder name
+    size_t nameLen = pEnd - pos - 1;
+    char name[32];
+    if (nameLen >= sizeof(name)) { pos++; continue; }
+    memcpy(name, pos + 1, nameLen);
+    name[nameLen] = '\0';
+
+    // Try to resolve
+    String value;
+    if (resolvePlaceholder(name, value)) {
+      // Emit literal HTML before this placeholder
+      if (pos > literalStart) emit(literalStart, pos - literalStart);
+      // Emit the resolved value
+      if (value.length() > 0) emit(value.c_str(), value.length());
+      // Advance past closing '%'
+      pos = pEnd + 1;
+      literalStart = pos;
+    } else {
+      pos++;
+    }
+  }
+
+  // Emit remaining literal HTML
+  if (end > literalStart) emit(literalStart, end - literalStart);
+  flush();
+
+  server.sendContent("");  // End chunked response
+  free(buf);
 }
 
 // ---------------------------------------------------------------------------
@@ -1599,6 +1738,8 @@ static void readDisplayFromForm() {
   }
   if (server.hasArg("clr_bg"))    dispSettings.bgColor = htmlToRgb565(server.arg("clr_bg").c_str());
   if (server.hasArg("clr_track")) dispSettings.trackColor = htmlToRgb565(server.arg("clr_track").c_str());
+  if (server.hasArg("clk_time"))  dispSettings.clockTimeColor = htmlToRgb565(server.arg("clk_time").c_str());
+  if (server.hasArg("clk_date"))  dispSettings.clockDateColor = htmlToRgb565(server.arg("clk_date").c_str());
 
   readGaugeColorsFromForm("prg", dispSettings.progress);
   readGaugeColorsFromForm("noz", dispSettings.nozzle);
@@ -1606,17 +1747,9 @@ static void readDisplayFromForm() {
   readGaugeColorsFromForm("pfn", dispSettings.partFan);
   readGaugeColorsFromForm("afn", dispSettings.auxFan);
   readGaugeColorsFromForm("cfn", dispSettings.chamberFan);
-  readGaugeColorsFromForm("clk", dispSettings.clock);
+  readGaugeColorsFromForm("cht", dispSettings.chamberTemp);
+  readGaugeColorsFromForm("hbk", dispSettings.heatbreak);
   readGaugeColorsFromForm("eta", dispSettings.eta);
-
-  // Gauge layout slots
-  for (int i = 0; i < GAUGE_SLOT_COUNT; i++) {
-    String key = "slot"; key += i;
-    if (server.hasArg(key)) {
-      uint8_t v = (uint8_t)server.arg(key).toInt();
-      if (v < GAUGE_TYPE_COUNT) dispSettings.gaugeSlots[i] = v;
-    }
-  }
 
   if (server.hasArg("fmins")) {
     dpSettings.finishDisplayMins = server.arg("fmins").toInt();
@@ -1662,9 +1795,7 @@ static void handleRoot() {
     server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     server.send(200, "text/html", FPSTR(PAGE_AP_HTML));
   } else {
-    String page = FPSTR(PAGE_HTML);
-    processTemplate(page);
-    server.send(200, "text/html", page);
+    streamTemplate();
   }
 }
 
@@ -1741,7 +1872,7 @@ static void handleSavePrinter() {
 
   savePrinterConfig(slot);
 
-  // Reinit MQTT — disconnect changed slot, then reinit all
+  // Reinit MQTT - disconnect changed slot, then reinit all
   disconnectBambuMqtt(slot);
   initBambuMqtt();
 
@@ -1751,6 +1882,26 @@ static void handleSavePrinter() {
   } else {
     server.send(200, "application/json", "{\"status\":\"ok\"}");
   }
+}
+
+// Save gauge layout only (no MQTT reinit needed)
+static void handleSaveGaugeLayout() {
+  uint8_t slot = 0;
+  if (server.hasArg("slot")) slot = server.arg("slot").toInt();
+  if (slot >= MAX_ACTIVE_PRINTERS) slot = 0;
+
+  PrinterConfig& cfg = printers[slot].config;
+  for (uint8_t g = 0; g < GAUGE_SLOT_COUNT; g++) {
+    char argName[8];
+    snprintf(argName, sizeof(argName), "gs%d", g);
+    if (server.hasArg(argName)) {
+      uint8_t val = server.arg(argName).toInt();
+      cfg.gaugeSlots[g] = (val < GAUGE_TYPE_COUNT) ? val : GAUGE_EMPTY;
+    }
+  }
+
+  savePrinterConfig(slot);
+  server.send(200, "application/json", "{\"status\":\"ok\"}");
 }
 
 // Save WiFi + network settings (requires restart)
@@ -1828,6 +1979,33 @@ static void handleStatus() {
   server.send(200, "application/json", json);
 }
 
+static void handleTimezones() {
+  size_t tzCount;
+  const TimezoneRegion* regions = getSupportedTimezones(&tzCount);
+  // Stream JSON directly to avoid building large String
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.send(200, "application/json", "");
+  server.sendContent("{\"selected\":");
+  server.sendContent(String((int)netSettings.timezoneIndex));
+  server.sendContent(",\"zones\":[");
+  for (size_t i = 0; i < tzCount; i++) {
+    if (i > 0) server.sendContent(",");
+    // JSON-escape the label into a stack buffer (defensive - current labels are clean)
+    char esc[80];
+    size_t j = 0;
+    esc[j++] = '"';
+    for (const char* p = regions[i].name; *p && j < sizeof(esc) - 2; p++) {
+      if (*p == '"' || *p == '\\') esc[j++] = '\\';
+      esc[j++] = *p;
+    }
+    esc[j++] = '"';
+    esc[j] = '\0';
+    server.sendContent(esc);
+  }
+  server.sendContent("]}");
+  server.sendContent("");  // terminate chunked response
+}
+
 static void handleReset() {
   server.send(200, "text/html",
     "<html><body style='background:#0D1117;color:#E6EDF3;text-align:center;padding-top:80px;font-family:sans-serif'>"
@@ -1895,6 +2073,7 @@ static void handleToggleSetting() {
 
   saveSettings();
   if (key == "invcol") applyDisplaySettings();
+  if (key == "use24h") { resetClock(); resetPongClock(); triggerDisplayTransition(); }
   server.send(200, "text/plain", "OK");
 }
 
@@ -1920,6 +2099,8 @@ static void handlePrinterConfig() {
   doc["region"] = cfg.region == REGION_EU ? "eu" : (cfg.region == REGION_CN ? "cn" : "us");
   doc["connected"] = st.connected;
   doc["configured"] = isPrinterConfigured(slot);
+  JsonArray slots = doc["gaugeSlots"].to<JsonArray>();
+  for (uint8_t g = 0; g < GAUGE_SLOT_COUNT; g++) slots.add(cfg.gaugeSlots[g]);
 
   String json;
   serializeJson(doc, json);
@@ -1977,6 +2158,9 @@ static void handleSaveRotation() {
   if (server.hasArg("buzqe")) {
     int qe = server.arg("buzqe").toInt();
     if (qe >= 0 && qe <= 23) buzzerSettings.quietEndHour = qe;
+  }
+  if (server.hasArg("buzclick")) {
+    buzzerSettings.buttonClick = (server.arg("buzclick") == "1");
   }
   saveBuzzerSettings();
   initBuzzer();
@@ -2038,6 +2222,8 @@ static void handleSettingsExport() {
     p["accessCode"] = cfg.accessCode;
     p["cloudUserId"] = cfg.cloudUserId;
     p["region"] = (uint8_t)cfg.region;
+    JsonArray slots = p["gaugeSlots"].to<JsonArray>();
+    for (uint8_t g = 0; g < GAUGE_SLOT_COUNT; g++) slots.add(cfg.gaugeSlots[g]);
   }
 
   // Display
@@ -2047,6 +2233,8 @@ static void handleSettingsExport() {
   disp["rotation"] = dispSettings.rotation;
   rgb565ToHtml(dispSettings.bgColor, buf);    disp["bgColor"] = String(buf);
   rgb565ToHtml(dispSettings.trackColor, buf); disp["trackColor"] = String(buf);
+  rgb565ToHtml(dispSettings.clockTimeColor, buf); disp["clockTimeColor"] = String(buf);
+  rgb565ToHtml(dispSettings.clockDateColor, buf); disp["clockDateColor"] = String(buf);
   disp["animatedBar"] = dispSettings.animatedBar;
   disp["pongClock"] = dispSettings.pongClock;
   disp["snakeClock"] = dispSettings.snakeClock;
@@ -2054,7 +2242,8 @@ static void handleSettingsExport() {
   disp["smallLabels"] = dispSettings.smallLabels;
 
   JsonArray slots = disp["gaugeSlots"].to<JsonArray>();
-  for (int i = 0; i < GAUGE_SLOT_COUNT; i++) slots.add(dispSettings.gaugeSlots[i]);
+  // Note: gauge slots are per-printer (in PrinterConfig), not exported here
+  (void)slots;
 
   JsonObject gauges = disp["gauges"].to<JsonObject>();
   JsonObject gPrg = gauges["progress"].to<JsonObject>(); gaugeColorsToJson(gPrg, dispSettings.progress);
@@ -2063,6 +2252,8 @@ static void handleSettingsExport() {
   JsonObject gPfn = gauges["partFan"].to<JsonObject>();  gaugeColorsToJson(gPfn, dispSettings.partFan);
   JsonObject gAfn = gauges["auxFan"].to<JsonObject>();   gaugeColorsToJson(gAfn, dispSettings.auxFan);
   JsonObject gCfn = gauges["chamberFan"].to<JsonObject>(); gaugeColorsToJson(gCfn, dispSettings.chamberFan);
+  JsonObject gCht = gauges["chamberTemp"].to<JsonObject>(); gaugeColorsToJson(gCht, dispSettings.chamberTemp);
+  JsonObject gHbk = gauges["heatbreak"].to<JsonObject>(); gaugeColorsToJson(gHbk, dispSettings.heatbreak);
   JsonObject gEta = gauges["eta"].to<JsonObject>();        gaugeColorsToJson(gEta, dispSettings.eta);
 
   // Display power
@@ -2105,6 +2296,7 @@ static void handleSettingsExport() {
   buz["pin"] = buzzerSettings.pin;
   buz["quietStart"] = buzzerSettings.quietStartHour;
   buz["quietEnd"] = buzzerSettings.quietEndHour;
+  buz["buttonClick"] = buzzerSettings.buttonClick;
 
   String json;
   serializeJsonPretty(doc, json);
@@ -2180,6 +2372,17 @@ static void handleSettingsImportFinish() {
       if (p["accessCode"].is<const char*>())  strlcpy(cfg.accessCode, p["accessCode"], sizeof(cfg.accessCode));
       if (p["cloudUserId"].is<const char*>()) strlcpy(cfg.cloudUserId, p["cloudUserId"], sizeof(cfg.cloudUserId));
       if (p["region"].is<uint8_t>())          cfg.region = (CloudRegion)p["region"].as<uint8_t>();
+      JsonArray slots = p["gaugeSlots"];
+      if (slots && slots.size() == GAUGE_SLOT_COUNT) {
+        static const uint8_t defSlots[GAUGE_SLOT_COUNT] = {
+          GAUGE_PROGRESS, GAUGE_NOZZLE, GAUGE_BED,
+          GAUGE_PART_FAN, GAUGE_AUX_FAN, GAUGE_CHAMBER_FAN
+        };
+        for (uint8_t g = 0; g < GAUGE_SLOT_COUNT; g++) {
+          uint8_t v = slots[g].as<uint8_t>();
+          cfg.gaugeSlots[g] = (v < GAUGE_TYPE_COUNT) ? v : defSlots[g];
+        }
+      }
     }
   }
 
@@ -2190,19 +2393,15 @@ static void handleSettingsImportFinish() {
     if (disp["rotation"].is<uint8_t>())   dispSettings.rotation = disp["rotation"].as<uint8_t>();
     if (disp["bgColor"].is<const char*>())    dispSettings.bgColor = htmlToRgb565(disp["bgColor"]);
     if (disp["trackColor"].is<const char*>()) dispSettings.trackColor = htmlToRgb565(disp["trackColor"]);
+    if (disp["clockTimeColor"].is<const char*>()) dispSettings.clockTimeColor = htmlToRgb565(disp["clockTimeColor"]);
+    if (disp["clockDateColor"].is<const char*>()) dispSettings.clockDateColor = htmlToRgb565(disp["clockDateColor"]);
     if (disp["animatedBar"].is<bool>())       dispSettings.animatedBar = disp["animatedBar"].as<bool>();
     if (disp["pongClock"].is<bool>())        dispSettings.pongClock  = disp["pongClock"].as<bool>();
     if (disp["snakeClock"].is<bool>())       dispSettings.snakeClock = disp["snakeClock"].as<bool>();
     if (disp["pacmanClock"].is<bool>())      dispSettings.pacmanClock = disp["pacmanClock"].as<bool>();
     if (disp["smallLabels"].is<bool>())      dispSettings.smallLabels = disp["smallLabels"].as<bool>();
 
-    if (disp["gaugeSlots"].is<JsonArray>()) {
-      JsonArray slotArr = disp["gaugeSlots"].as<JsonArray>();
-      for (int i = 0; i < GAUGE_SLOT_COUNT && i < (int)slotArr.size(); i++) {
-        uint8_t v = slotArr[i].as<uint8_t>();
-        if (v < GAUGE_TYPE_COUNT) dispSettings.gaugeSlots[i] = v;
-      }
-    }
+    // Note: gauge slots are per-printer, not imported from global display settings
 
     JsonObject gauges = disp["gauges"];
     if (gauges) {
@@ -2212,6 +2411,8 @@ static void handleSettingsImportFinish() {
       if (gauges["partFan"].is<JsonObject>())  { JsonObject g = gauges["partFan"];  gaugeColorsFromJson(g, dispSettings.partFan); }
       if (gauges["auxFan"].is<JsonObject>())   { JsonObject g = gauges["auxFan"];   gaugeColorsFromJson(g, dispSettings.auxFan); }
       if (gauges["chamberFan"].is<JsonObject>()){ JsonObject g = gauges["chamberFan"]; gaugeColorsFromJson(g, dispSettings.chamberFan); }
+      if (gauges["chamberTemp"].is<JsonObject>()){ JsonObject g = gauges["chamberTemp"]; gaugeColorsFromJson(g, dispSettings.chamberTemp); }
+      if (gauges["heatbreak"].is<JsonObject>()){ JsonObject g = gauges["heatbreak"]; gaugeColorsFromJson(g, dispSettings.heatbreak); }
       if (gauges["eta"].is<JsonObject>())        { JsonObject g = gauges["eta"];        gaugeColorsFromJson(g, dispSettings.eta); }
     }
   }
@@ -2278,6 +2479,7 @@ static void handleSettingsImportFinish() {
       uint8_t qe = buz["quietEnd"].as<uint8_t>();
       if (qe <= 23) buzzerSettings.quietEndHour = qe;
     }
+    if (buz["buttonClick"].is<bool>()) buzzerSettings.buttonClick = buz["buttonClick"].as<bool>();
   }
 
   // Save everything to NVS
@@ -2508,6 +2710,7 @@ void initWebServer() {
   server.on("/", HTTP_GET, handleRoot);
   server.on("/save/wifi", HTTP_POST, handleSaveWifi);
   server.on("/save/printer", HTTP_POST, handleSavePrinter);
+  server.on("/save/gaugelayout", HTTP_POST, handleSaveGaugeLayout);
   server.on("/save/rotation", HTTP_POST, handleSaveRotation);
   server.on("/save/power", HTTP_POST, handleSavePower);
   server.on("/buzzer/test", HTTP_POST, handleBuzzerTest);
@@ -2515,6 +2718,7 @@ void initWebServer() {
   server.on("/apply", HTTP_POST, handleApply);
   server.on("/brightness", HTTP_GET, handleBrightnessPreview);
   server.on("/status", HTTP_GET, handleStatus);
+  server.on("/api/timezones", HTTP_GET, handleTimezones);
   server.on("/reset", HTTP_GET, handleReset);
   server.on("/debug", HTTP_GET, handleDebug);
   server.on("/debug/toggle", HTTP_POST, handleDebugToggle);

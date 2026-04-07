@@ -1,6 +1,7 @@
 .pio
 .vscode
 .claude
+codex/
 .cache
 *.o
 *.obj

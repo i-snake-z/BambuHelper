@@ -112,6 +112,8 @@ void defaultDisplaySettings(DisplaySettings& ds) {
   ds.smallLabels = false;
   ds.invertColors = false;
   ds.cydExtraMode = 0;
+  ds.clockTimeColor = CLR_TEXT;
+  ds.clockDateColor = CLR_TEXT_DIM;
 
   // Progress: green arc, green label, white value
   ds.progress = { CLR_GREEN, CLR_GREEN, CLR_TEXT };
@@ -125,18 +127,22 @@ void defaultDisplaySettings(DisplaySettings& ds) {
   ds.auxFan = { CLR_ORANGE, CLR_ORANGE, CLR_TEXT };
   // Chamber fan: green arc, green label, white value
   ds.chamberFan = { CLR_GREEN, CLR_GREEN, CLR_TEXT };
-  // Clock: white time, dim date, white am/pm
-  ds.clock = { CLR_TEXT, CLR_TEXT_DIM, CLR_TEXT };
+  // Chamber temp: cyan arc, cyan label, white value
+  ds.chamberTemp = { CLR_CYAN, CLR_CYAN, CLR_TEXT };
+  // Heatbreak fan: orange arc, orange label, white value
+  ds.heatbreak = { CLR_ORANGE, CLR_ORANGE, CLR_TEXT };
   // ETA widget: green number, dim label
   ds.eta = { CLR_GREEN, CLR_TEXT_DIM, CLR_GREEN };
+}
 
-  // Default gauge layout: Progress | Nozzle | Bed / Part Fan | Aux Fan | Chamber Fan
-  ds.gaugeSlots[0] = GAUGE_PROGRESS;
-  ds.gaugeSlots[1] = GAUGE_NOZZLE;
-  ds.gaugeSlots[2] = GAUGE_BED;
-  ds.gaugeSlots[3] = GAUGE_PART_FAN;
-  ds.gaugeSlots[4] = GAUGE_AUX_FAN;
-  ds.gaugeSlots[5] = GAUGE_CHAMBER_FAN;
+// Default gauge slot layout: Progress, Nozzle, Bed, Part Fan, Aux Fan, Chamber Fan
+static void defaultGaugeSlots(uint8_t* slots) {
+  slots[0] = GAUGE_PROGRESS;
+  slots[1] = GAUGE_NOZZLE;
+  slots[2] = GAUGE_BED;
+  slots[3] = GAUGE_PART_FAN;
+  slots[4] = GAUGE_AUX_FAN;
+  slots[5] = GAUGE_CHAMBER_FAN;
 }
 
 // ---------------------------------------------------------------------------
@@ -205,6 +211,21 @@ void loadSettings() {
     snprintf(key, sizeof(key), "p%d_region", i);
     cfg.region = (CloudRegion)prefs.getUChar(key, REGION_US);
 
+    // Gauge slot layout (per-printer)
+    snprintf(key, sizeof(key), "p%d_slots", i);
+    size_t read = prefs.getBytes(key, cfg.gaugeSlots, GAUGE_SLOT_COUNT);
+    if (read != GAUGE_SLOT_COUNT) {
+      defaultGaugeSlots(cfg.gaugeSlots);
+    } else {
+      for (uint8_t g = 0; g < GAUGE_SLOT_COUNT; g++) {
+        if (cfg.gaugeSlots[g] >= GAUGE_TYPE_COUNT) {
+          uint8_t def[GAUGE_SLOT_COUNT];
+          defaultGaugeSlots(def);
+          cfg.gaugeSlots[g] = def[g];
+        }
+      }
+    }
+
     // Zero out state
     memset(&printers[i].state, 0, sizeof(BambuState));
     strlcpy(printers[i].state.gcodeState, "UNKNOWN", sizeof(printers[i].state.gcodeState));
@@ -223,8 +244,9 @@ void loadSettings() {
   dispSettings.pacmanClock = prefs.getBool("dsp_pac", def.pacmanClock);
   dispSettings.smallLabels = prefs.getBool("dsp_slbl", def.smallLabels);
   dispSettings.invertColors = prefs.getBool("dsp_inv", def.invertColors);
-  dispSettings.cydExtraMode = prefs.getUChar("dsp_cydex", 0);
-  dispSettings.cydExtraMode = 0;  // temporary: force AMS-only on CYD
+  dispSettings.cydExtraMode = 0;  // extra gauges removed - AMS only on CYD
+  dispSettings.clockTimeColor = prefs.getUShort("dsp_clkt", CLR_TEXT);
+  dispSettings.clockDateColor = prefs.getUShort("dsp_clkd", CLR_TEXT_DIM);
 
   loadGaugeColors("gc_prg", dispSettings.progress, def.progress);
   loadGaugeColors("gc_noz", dispSettings.nozzle, def.nozzle);
@@ -232,17 +254,9 @@ void loadSettings() {
   loadGaugeColors("gc_pfn", dispSettings.partFan, def.partFan);
   loadGaugeColors("gc_afn", dispSettings.auxFan, def.auxFan);
   loadGaugeColors("gc_cfn", dispSettings.chamberFan, def.chamberFan);
-  loadGaugeColors("gc_clk", dispSettings.clock, def.clock);
+  loadGaugeColors("gc_cht", dispSettings.chamberTemp, def.chamberTemp);
+  loadGaugeColors("gc_hbk", dispSettings.heatbreak, def.heatbreak);
   loadGaugeColors("gc_eta", dispSettings.eta, def.eta);
-
-  // Gauge layout slots
-  if (prefs.getBytes("dsp_slots", dispSettings.gaugeSlots, GAUGE_SLOT_COUNT) != GAUGE_SLOT_COUNT) {
-    memcpy(dispSettings.gaugeSlots, def.gaugeSlots, GAUGE_SLOT_COUNT);
-  }
-  for (uint8_t i = 0; i < GAUGE_SLOT_COUNT; i++) {
-    if (dispSettings.gaugeSlots[i] >= GAUGE_TYPE_COUNT)
-      dispSettings.gaugeSlots[i] = def.gaugeSlots[i];
-  }
 
   // Network settings
   netSettings.useDHCP = prefs.getBool("net_dhcp", true);
@@ -329,6 +343,7 @@ void loadSettings() {
   buzzerSettings.pin = prefs.getUChar("buz_pin", BUZZER_DEFAULT_PIN);
   buzzerSettings.quietStartHour = prefs.getUChar("buz_qstart", 0);
   buzzerSettings.quietEndHour = prefs.getUChar("buz_qend", 0);
+  buzzerSettings.buttonClick = prefs.getBool("buz_click", false);
 
   // Cloud email (display only)
   strlcpy(cloudEmail, prefs.getString("cl_email", "").c_str(), sizeof(cloudEmail));
@@ -369,6 +384,8 @@ void saveSettings() {
   prefs.putBool("dsp_slbl", dispSettings.smallLabels);
   prefs.putBool("dsp_inv", dispSettings.invertColors);
   prefs.putUChar("dsp_cydex", dispSettings.cydExtraMode);
+  prefs.putUShort("dsp_clkt", dispSettings.clockTimeColor);
+  prefs.putUShort("dsp_clkd", dispSettings.clockDateColor);
 
   saveGaugeColors("gc_prg", dispSettings.progress);
   saveGaugeColors("gc_noz", dispSettings.nozzle);
@@ -376,10 +393,9 @@ void saveSettings() {
   saveGaugeColors("gc_pfn", dispSettings.partFan);
   saveGaugeColors("gc_afn", dispSettings.auxFan);
   saveGaugeColors("gc_cfn", dispSettings.chamberFan);
-  saveGaugeColors("gc_clk", dispSettings.clock);
+  saveGaugeColors("gc_cht", dispSettings.chamberTemp);
+  saveGaugeColors("gc_hbk", dispSettings.heatbreak);
   saveGaugeColors("gc_eta", dispSettings.eta);
-
-  prefs.putBytes("dsp_slots", dispSettings.gaugeSlots, GAUGE_SLOT_COUNT);
 
   // Network settings
   prefs.putBool("net_dhcp", netSettings.useDHCP);
@@ -445,6 +461,9 @@ void savePrinterConfig(uint8_t index) {
   snprintf(key, sizeof(key), "p%d_region", index);
   prefs.putUChar(key, cfg.region);
 
+  snprintf(key, sizeof(key), "p%d_slots", index);
+  prefs.putBytes(key, cfg.gaugeSlots, GAUGE_SLOT_COUNT);
+
   if (needOpen) prefs.end();
 }
 
@@ -469,6 +488,7 @@ void saveBuzzerSettings() {
   prefs.putUChar("buz_pin", buzzerSettings.pin);
   prefs.putUChar("buz_qstart", buzzerSettings.quietStartHour);
   prefs.putUChar("buz_qend", buzzerSettings.quietEndHour);
+  prefs.putBool("buz_click", buzzerSettings.buttonClick);
   prefs.end();
 }
 

@@ -29,6 +29,11 @@ static const ToneStep melodyConnected[] = {
   {1568, 120},
 };
 
+// Button click: single short tick
+static const ToneStep melodyClick[] = {
+  {4000, 8},
+};
+
 // ---------------------------------------------------------------------------
 //  Non-blocking playback state
 // ---------------------------------------------------------------------------
@@ -79,6 +84,10 @@ void buzzerPlay(BuzzerEvent event) {
       currentMelody = melodyConnected;
       melodyLen = sizeof(melodyConnected) / sizeof(ToneStep);
       break;
+    case BUZZ_CLICK:
+      currentMelody = melodyClick;
+      melodyLen = sizeof(melodyClick) / sizeof(ToneStep);
+      break;
     default: return;
   }
 
@@ -89,6 +98,25 @@ void buzzerPlay(BuzzerEvent event) {
   // Start first tone
   if (currentMelody[0].freq > 0) {
     tone(buzzerSettings.pin, currentMelody[0].freq);
+  }
+}
+
+void buzzerPlayClick() {
+  if (!buzzerSettings.enabled || buzzerSettings.pin == 0) return;
+  if (!buzzerSettings.buttonClick) return;
+  // Click ignores quiet hours - it's user-initiated tactile feedback.
+  // Played synchronously (8ms delay is imperceptible) so the tone always
+  // completes cleanly even if the next loop iteration blocks on TLS.
+  bool wasPlaying = playing;
+  if (wasPlaying) noTone(buzzerSettings.pin);
+  tone(buzzerSettings.pin, melodyClick[0].freq);
+  delay(melodyClick[0].ms);
+  noTone(buzzerSettings.pin);
+  digitalWrite(buzzerSettings.pin, LOW);
+  if (wasPlaying && currentMelody && melodyIdx < melodyLen) {
+    stepStartMs = millis();
+    if (currentMelody[melodyIdx].freq > 0)
+      tone(buzzerSettings.pin, currentMelody[melodyIdx].freq);
   }
 }
 

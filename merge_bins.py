@@ -5,7 +5,7 @@ Create BambuHelper release firmware files.
 Usage:
     python merge_bins.py                    # auto-reads version, builds esp32s3
     python merge_bins.py --board cyd        # build CYD firmware
-    python merge_bins.py --board esp32c3    # build ESP32-C3 firmware
+    python merge_bins.py --board c3          # build ESP32-C3 firmware
     python merge_bins.py v2.5               # override version
     python merge_bins.py --ota              # OTA binary only
     python merge_bins.py --full             # Full (WebFlasher) binary only
@@ -40,12 +40,12 @@ BOARDS = {
         'firmware_offset': 0x10000,
         'board_id': 'cyd',
     },
-    'esp32c3': {
+    'c3': {
         'build_dir': '.pio/build/esp32c3',
         'bootloader_offset': 0x0,       # ESP32-C3 starts at 0x0
         'partitions_offset': 0x8000,
         'firmware_offset': 0x10000,
-        'board_id': 'esp32c3',
+        'board_id': 'c3',
     },
 }
 

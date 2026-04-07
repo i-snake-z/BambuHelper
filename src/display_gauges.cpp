@@ -304,7 +304,9 @@ void drawTempGauge(TFT_eSPI& tft, int16_t cx, int16_t cy, int16_t radius,
   // Build display strings
   char tempBuf[12], targetBuf[12];
   snprintf(tempBuf, sizeof(tempBuf), "%.0f", current);
-  snprintf(targetBuf, sizeof(targetBuf), "/%.0f", target);
+  bool hasTarget = (target > 0.5f);
+  if (hasTarget) snprintf(targetBuf, sizeof(targetBuf), "/%.0f", target);
+  else targetBuf[0] = '\0';
 
   // Only clear center + redraw text when displayed string actually changes
   if (gaugeTextChanged(cx, cy, tempBuf, targetBuf, forceRedraw)) {
@@ -313,11 +315,13 @@ void drawTempGauge(TFT_eSPI& tft, int16_t cx, int16_t cy, int16_t radius,
     tft.setTextDatum(MC_DATUM);
     tft.setTextFont(4);
     tft.setTextColor(valColor);
-    tft.drawString(tempBuf, cx, cy - 4);
+    tft.drawString(tempBuf, cx, hasTarget ? (cy - 4) : cy);
 
-    tft.setTextFont(1);
-    tft.setTextColor(CLR_TEXT_DIM);
-    tft.drawString(targetBuf, cx, cy + 10);
+    if (hasTarget) {
+      tft.setTextFont(1);
+      tft.setTextColor(CLR_TEXT_DIM);
+      tft.drawString(targetBuf, cx, cy + 10);
+    }
 
     bool sm = dispSettings.smallLabels;
     tft.setTextFont(sm ? 1 : 2);
@@ -353,56 +357,6 @@ void drawEtaWidget(TFT_eSPI& tft, int16_t cx, int16_t cy, int16_t radius,
   tft.setTextColor(dispSettings.eta.label, bg);
   tft.drawString("To finish", cx, cy + radius - 1);
 }
-// ---------------------------------------------------------------------------
-//  Clock widget — shows current HH:MM (or H:MM AM/PM) in the gauge slot.
-//  Uses dispSettings.clock colors. Redraws once per minute.
-// ---------------------------------------------------------------------------
-void drawClockWidget(TFT_eSPI& tft, int16_t cx, int16_t cy, int16_t radius,
-                     bool forceRedraw) {
-  struct tm now;
-  if (!getLocalTime(&now, 0)) return;   // no time sync yet
-
-  static int8_t prevMin = -1;
-  if (!forceRedraw && now.tm_min == prevMin) return;
-  prevMin = now.tm_min;
-
-  uint16_t bg = dispSettings.bgColor;
-  const int16_t thickness = 6;
-  const int16_t halfW = radius + thickness + 2;
-  const int16_t topY  = cy - radius - thickness - 2;
-  const int16_t botY  = cy + radius + 6;  // tight: label bottom ~cy+radius+3
-  tft.fillRect(cx - halfW, topY, halfW * 2, botY - topY, bg);
-
-  char timeBuf[8];
-  if (netSettings.use24h) {
-    snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", now.tm_hour, now.tm_min);
-  } else {
-    int h = now.tm_hour % 12;
-    if (h == 0) h = 12;
-    snprintf(timeBuf, sizeof(timeBuf), "%d:%02d", h, now.tm_min);
-  }
-
-  tft.setTextDatum(MC_DATUM);
-
-  // Time string — Font 4 fits "00:00" comfortably in the slot
-  tft.setTextFont(4);
-  tft.setTextColor(dispSettings.clock.arc, bg);
-  if (!netSettings.use24h) {
-    tft.drawString(timeBuf, cx, cy - 8);
-    // AM/PM below in smaller font
-    tft.setTextFont(1);
-    tft.setTextColor(dispSettings.clock.value, bg);
-    tft.drawString(now.tm_hour < 12 ? "AM" : "PM", cx, cy + 10);
-  } else {
-    tft.drawString(timeBuf, cx, cy - 4);
-  }
-
-  // Label at same Y as every other gauge
-  tft.setTextFont(1);
-  tft.setTextColor(dispSettings.clock.label, bg);
-  tft.drawString("Time", cx, cy + radius - 1);
-}
-
 // ---------------------------------------------------------------------------
 //  Fan speed gauge (0-100%)
 // ---------------------------------------------------------------------------
@@ -450,5 +404,49 @@ void drawFanGauge(TFT_eSPI& tft, int16_t cx, int16_t cy, int16_t radius,
     tft.setTextFont(sm ? 1 : 2);
     tft.setTextColor(lblColor, bg);
     tft.drawString(label, cx, cy + radius + (sm ? 3 : -1));
+  }
+}
+
+// ---------------------------------------------------------------------------
+//  Clock widget - shows current time HH:MM inside a track ring
+// ---------------------------------------------------------------------------
+void drawClockWidget(TFT_eSPI& tft, int16_t cx, int16_t cy, int16_t radius,
+                     int16_t thickness, bool forceRedraw) {
+  uint16_t bg = dispSettings.bgColor;
+
+  if (forceRedraw) {
+    tft.fillCircle(cx, cy, radius + 2, bg);
+  }
+
+  // Get current time
+  time_t now = time(nullptr);
+  struct tm tm;
+  localtime_r(&now, &tm);
+
+  char timeBuf[8];
+  // Show placeholder until NTP has synced
+  if (now < 1704067200) {  // 2024-01-01 00:00:00 UTC
+    strlcpy(timeBuf, "--:--", sizeof(timeBuf));
+  } else {
+    int h = tm.tm_hour;
+    if (!netSettings.use24h) {
+      h = h % 12;
+      if (h == 0) h = 12;
+    }
+    snprintf(timeBuf, sizeof(timeBuf), "%d:%02d", h, tm.tm_min);
+  }
+
+  if (gaugeTextChanged(cx, cy, timeBuf, "", forceRedraw)) {
+    tft.fillCircle(cx, cy, radius - 1, bg);
+
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextFont(4);
+    tft.setTextColor(dispSettings.clockTimeColor);
+    tft.drawString(timeBuf, cx, cy);
+
+    bool sm = dispSettings.smallLabels;
+    tft.setTextFont(sm ? 1 : 2);
+    tft.setTextColor(dispSettings.clockDateColor, bg);
+    tft.drawString("Clock", cx, cy + radius + (sm ? 3 : -1));
   }
 }

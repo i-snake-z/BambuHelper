@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include "bambu_state.h"
 
-// Gauge widget types for the configurable 6-slot display grid
+// Gauge type identifiers for configurable slot layout
 enum GaugeType : uint8_t {
   GAUGE_EMPTY       = 0,
   GAUGE_PROGRESS    = 1,
@@ -13,11 +13,14 @@ enum GaugeType : uint8_t {
   GAUGE_PART_FAN    = 4,
   GAUGE_AUX_FAN     = 5,
   GAUGE_CHAMBER_FAN = 6,
-  GAUGE_ETA         = 7,
-  GAUGE_CLOCK       = 8,
-  GAUGE_TYPE_COUNT  = 9,
+  GAUGE_CHAMBER_TEMP= 7,
+  GAUGE_HEATBREAK   = 8,
+  GAUGE_CLOCK       = 9,
+  GAUGE_ETA         = 10,
+  GAUGE_TYPE_COUNT  // sentinel - always last
 };
-#define GAUGE_SLOT_COUNT 6
+
+static const uint8_t GAUGE_SLOT_COUNT = 6;
 
 // Per-gauge color config
 struct GaugeColors {
@@ -38,14 +41,16 @@ struct DisplaySettings {
   bool     smallLabels;    // use smaller gauge labels (Font 1 instead of Font 2)
   bool     invertColors;   // invert display colors (fixes white-bg on some panels)
   uint8_t  cydExtraMode;   // CYD extra area: 0=AMS, 1=Extra Gauges
-  uint8_t  gaugeSlots[GAUGE_SLOT_COUNT]; // gauge widget in each of the 6 display positions
+  uint16_t clockTimeColor; // clock digits color (RGB565)
+  uint16_t clockDateColor; // clock date/AM-PM color (RGB565)
   GaugeColors progress;
   GaugeColors nozzle;
   GaugeColors bed;
   GaugeColors partFan;
   GaugeColors auxFan;
   GaugeColors chamberFan;
-  GaugeColors clock;
+  GaugeColors chamberTemp;
+  GaugeColors heatbreak;
   GaugeColors eta;
 };
 
@@ -87,6 +92,7 @@ struct BuzzerSettings {
   uint8_t pin;
   uint8_t quietStartHour;   // quiet hours start (0-23), 0 = disabled
   uint8_t quietEndHour;     // quiet hours end (0-23)
+  bool buttonClick;          // play click sound on button press
 };
 
 // Tasmota smart plug power monitoring
