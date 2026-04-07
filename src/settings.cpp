@@ -19,6 +19,7 @@ uint8_t buttonPin = BUTTON_DEFAULT_PIN;
 bool btnCycleClock = false;
 BuzzerSettings buzzerSettings = { false, BUZZER_DEFAULT_PIN, 0, 0 };
 TasmotaSettings tasmotaSettings = { false, "", 0, 30, 255 };
+WeatherSettings weatherSettings = { false, 0.0f, 0.0f, "", true, 15, CLR_TEXT, CLR_TEXT_DIM };
 
 static Preferences prefs;
 
@@ -355,6 +356,18 @@ void loadSettings() {
   tasmotaSettings.pollInterval = prefs.getUChar("tsm_pi", 10);
   tasmotaSettings.assignedSlot = prefs.getUChar("tsm_slot", 255);
 
+  // Weather screensaver
+  weatherSettings.enabled    = prefs.getBool("wth_en", false);
+  weatherSettings.lat        = prefs.getFloat("wth_lat", 0.0f);
+  weatherSettings.lon        = prefs.getFloat("wth_lon", 0.0f);
+  strlcpy(weatherSettings.city, prefs.getString("wth_city", "").c_str(), sizeof(weatherSettings.city));
+  weatherSettings.useMetric  = prefs.getBool("wth_metric", true);
+  weatherSettings.updateMins = prefs.getUChar("wth_mins", 15);
+  if (weatherSettings.updateMins < 5)  weatherSettings.updateMins = 5;
+  if (weatherSettings.updateMins > 60) weatherSettings.updateMins = 60;
+  weatherSettings.tempColor  = prefs.getUShort("wth_tc", CLR_TEXT);
+  weatherSettings.infoColor  = prefs.getUShort("wth_ic", CLR_TEXT_DIM);
+
   prefs.end();
 }
 
@@ -426,6 +439,16 @@ void saveSettings() {
   prefs.putUChar("tsm_dm", tasmotaSettings.displayMode);
   prefs.putUChar("tsm_pi", tasmotaSettings.pollInterval);
   prefs.putUChar("tsm_slot", tasmotaSettings.assignedSlot);
+
+  // Weather screensaver
+  prefs.putBool("wth_en", weatherSettings.enabled);
+  prefs.putFloat("wth_lat", weatherSettings.lat);
+  prefs.putFloat("wth_lon", weatherSettings.lon);
+  prefs.putString("wth_city", weatherSettings.city);
+  prefs.putBool("wth_metric", weatherSettings.useMetric);
+  prefs.putUChar("wth_mins", weatherSettings.updateMins);
+  prefs.putUShort("wth_tc", weatherSettings.tempColor);
+  prefs.putUShort("wth_ic", weatherSettings.infoColor);
 
   prefs.end();
 }

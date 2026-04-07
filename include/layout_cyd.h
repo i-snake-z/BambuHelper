@@ -122,6 +122,19 @@
 #define LY_CLK_AMPM_Y    175
 #define LY_CLK_DATE_Y    205
 
+// --- Weather clock (time in upper half, weather in lower half) ---
+// Screen is 240x320; time digits are 48px tall centred at LY_WCK_TIME_Y
+#define LY_WCK_TIME_Y    80     // centre of HH:MM digits (spans y=56..y=104)
+#define LY_WCK_AMPM_Y    115    // AM/PM indicator (12h mode only)
+#define LY_WCK_DATE_Y    128    // date string centre
+#define LY_WCK_DIV_Y     143    // thin divider line
+#define LY_WCK_CITY_Y    162    // city label centre (font 2)
+#define LY_WCK_ICON_X    199    // weather icon centre X (right side, radius 44)
+#define LY_WCK_ICON_Y    232    // weather icon centre Y
+#define LY_WCK_TEMP_Y    195    // temperature (font 4)
+#define LY_WCK_COND_Y    222    // condition text (font 2)
+#define LY_WCK_EXTRA_Y   278    // H/W/FL (font 2, full-width, below icon)
+
 // --- Pong/Breakout clock ---
 #define LY_ARK_BRICK_ROWS   5
 #define LY_ARK_COLS          10

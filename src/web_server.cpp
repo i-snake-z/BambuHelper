@@ -12,6 +12,7 @@
 #include "tasmota.h"
 #include "clock_mode.h"
 #include "clock_pong.h"
+#include "weather.h"
 #include <WebServer.h>
 #include <ArduinoJson.h>
 #include <Update.h>
@@ -350,6 +351,7 @@ R"rawliteral(
           <option value="pong" %SCRSVR_PONG%>Breakout clock (animated game)</option>
           <option value="snake" %SCRSVR_SNAKE%>Snake clock (auto-playing Snake)</option>
           <option value="pacman" %SCRSVR_PACMAN%>Pac-Man clock (auto-playing Pac-Man)</option>
+          <option value="weather" %SCRSVR_WEATHER%>Weather clock (time + weather)</option>
         </select>
 
       </div>
@@ -469,7 +471,52 @@ R"rawliteral(
   </div>
 </div>
 
-<!-- ===== Section 3: Hardware & Multi-Printer ===== -->
+<!-- ===== Section 3: Weather ===== -->
+<div class="section" id="s-weather">
+  <div class="section-header" onclick="toggleSection('weather')">
+    <h2>Weather</h2>
+    <span class="arrow" id="arr-weather">&#9654;</span>
+  </div>
+  <div class="section-content" id="sec-weather">
+    <div class="section-body">
+      <p style="font-size:12px;color:#8B949E;margin-bottom:12px">Uses <a href="https://open-meteo.com" target="_blank" style="color:#58A6FF">Open-Meteo</a> (free, no API key). Select the <b>Weather clock</b> screensaver in Display to activate.<br>Find your coordinates at <a href="https://www.latlong.net/" target="_blank" style="color:#58A6FF">latlong.net</a>.</p>
+      <label for="wth_city">City name (display label)</label>
+      <input type="text" id="wth_city" maxlength="31" placeholder="e.g. Paris" value="%WTH_CITY%" style="width:100%;font-size:15px;padding:8px 10px;box-sizing:border-box">
+      <label for="wth_lat" style="margin-top:10px">Latitude</label>
+      <input type="number" id="wth_lat" step="0.0001" min="-90" max="90" placeholder="e.g. 48.8566" value="%WTH_LAT%">
+      <label for="wth_lon" style="margin-top:8px">Longitude</label>
+      <input type="number" id="wth_lon" step="0.0001" min="-180" max="180" placeholder="e.g. 2.3522" value="%WTH_LON%">
+      <label style="margin-top:10px">Units</label>
+      <div style="display:flex;gap:16px;margin-top:4px">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="radio" name="wth_unit" id="wth_metric" value="metric" %WTH_METRIC%> &deg;C / km/h
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="radio" name="wth_unit" id="wth_imperial" value="imperial" %WTH_IMPERIAL%> &deg;F / mph
+        </label>
+      </div>
+      <label for="wth_mins" style="margin-top:10px">Update interval (minutes)</label>
+      <select id="wth_mins">
+        <option value="10" %WTH_10%>Every 10 minutes</option>
+        <option value="15" %WTH_15%>Every 15 minutes</option>
+        <option value="30" %WTH_30%>Every 30 minutes</option>
+        <option value="60" %WTH_60%>Every 60 minutes</option>
+      </select>
+      <button type="button" class="btn btn-blue" style="margin-top:14px" onclick="applyWeather()">Save Weather Settings</button>
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid #30363D">
+        <h3 style="color:#58A6FF;font-size:14px;margin-bottom:10px">Colors</h3>
+        <div class="gauge-section"><h3>Temperature text color</h3><div class="color-row">
+          <label>Color</label><input type="color" id="wth_tc" value="%WTH_TC%">
+        </div></div>
+        <div class="gauge-section"><h3>City / Condition / Info text color</h3><div class="color-row">
+          <label>Color</label><input type="color" id="wth_ic" value="%WTH_IC%">
+        </div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Section 4: Hardware & Multi-Printer ===== -->
 <div class="section" id="s-rotate">
   <div class="section-header" onclick="toggleSection('rotate')">
     <h2>Hardware &amp; Multi-Printer</h2>
@@ -1065,6 +1112,19 @@ function applyDisplay(){
   }).catch(function(e){showToast('Apply failed');console.warn('applyDisplay:',e);});
 }
 
+function applyWeather(){
+  var p=new URLSearchParams();
+  p.append('wth_city',document.getElementById('wth_city').value);
+  p.append('wth_lat',document.getElementById('wth_lat').value);
+  p.append('wth_lon',document.getElementById('wth_lon').value);
+  p.append('wth_metric',document.querySelector('input[name="wth_unit"]:checked').value==='metric'?'1':'0');
+  p.append('wth_mins',document.getElementById('wth_mins').value);
+  p.append('wth_tc',document.getElementById('wth_tc').value);
+  p.append('wth_ic',document.getElementById('wth_ic').value);
+  fetch('/apply/weather',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()}).then(function(r){
+    if(r.ok) showToast('Weather settings saved!'); else showToast('Error saving weather settings');
+  }).catch(function(e){showToast('Save failed');console.warn('applyWeather:',e);});
+}
 // --- Instant checkbox toggle ---
 function toggleSetting(key,on){
   fetch('/save/toggle',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'key='+key+'&val='+(on?'1':'0')}).then(function(r){
@@ -1483,6 +1543,24 @@ static bool resolvePlaceholder(const char* name, String& out) {
   if (strcmp(name, "PONG") == 0)  { out = dispSettings.pongClock ? "checked" : ""; return true; }
   if (strcmp(name, "SNAKE") == 0) { out = dispSettings.snakeClock ? "checked" : ""; return true; }
   if (strcmp(name, "PACMAN") == 0){ out = dispSettings.pacmanClock ? "checked" : ""; return true; }
+  // Screensaver dropdown selected states
+  if (strcmp(name, "SCRSVR_NONE") == 0)    { out = (!dispSettings.pongClock && !dispSettings.snakeClock && !dispSettings.pacmanClock && !weatherSettings.enabled) ? "selected" : ""; return true; }
+  if (strcmp(name, "SCRSVR_PONG") == 0)    { out = dispSettings.pongClock   ? "selected" : ""; return true; }
+  if (strcmp(name, "SCRSVR_SNAKE") == 0)   { out = dispSettings.snakeClock  ? "selected" : ""; return true; }
+  if (strcmp(name, "SCRSVR_PACMAN") == 0)  { out = dispSettings.pacmanClock ? "selected" : ""; return true; }
+  if (strcmp(name, "SCRSVR_WEATHER") == 0) { out = weatherSettings.enabled  ? "selected" : ""; return true; }
+  // Weather settings
+  if (strcmp(name, "WTH_CITY") == 0)     { out = weatherSettings.city; return true; }
+  if (strcmp(name, "WTH_LAT") == 0)      { out = String(weatherSettings.lat, 4); return true; }
+  if (strcmp(name, "WTH_LON") == 0)      { out = String(weatherSettings.lon, 4); return true; }
+  if (strcmp(name, "WTH_METRIC") == 0)   { out = weatherSettings.useMetric  ? "checked" : ""; return true; }
+  if (strcmp(name, "WTH_IMPERIAL") == 0) { out = !weatherSettings.useMetric ? "checked" : ""; return true; }
+  if (strcmp(name, "WTH_10") == 0)  { out = weatherSettings.updateMins == 10 ? "selected" : ""; return true; }
+  if (strcmp(name, "WTH_15") == 0)  { out = weatherSettings.updateMins == 15 ? "selected" : ""; return true; }
+  if (strcmp(name, "WTH_30") == 0)  { out = weatherSettings.updateMins == 30 ? "selected" : ""; return true; }
+  if (strcmp(name, "WTH_60") == 0)  { out = weatherSettings.updateMins == 60 ? "selected" : ""; return true; }
+  if (strcmp(name, "WTH_TC") == 0)  { char buf[8]; rgb565ToHtml(weatherSettings.tempColor, buf); out = buf; return true; }
+  if (strcmp(name, "WTH_IC") == 0)  { char buf[8]; rgb565ToHtml(weatherSettings.infoColor,  buf); out = buf; return true; }
   if (strcmp(name, "SLBL") == 0)  { out = dispSettings.smallLabels ? "checked" : ""; return true; }
   if (strcmp(name, "INVCOL_ROW") == 0) {
 #if defined(DISPLAY_CYD)
@@ -1763,6 +1841,7 @@ static void readDisplayFromForm() {
     dispSettings.pongClock   = (sv == "pong");
     dispSettings.snakeClock  = (sv == "snake");
     dispSettings.pacmanClock = (sv == "pacman");
+    weatherSettings.enabled  = (sv == "weather");
   }
   dispSettings.smallLabels = server.hasArg("slbl");
   if (server.hasArg("cydextra")) {
@@ -1950,6 +2029,24 @@ static void handleApply() {
   if (strcmp(netSettings.timezoneStr, prevTz) != 0) {
     configTzTime(netSettings.timezoneStr, "pool.ntp.org", "time.nist.gov");
   }
+  server.send(200, "text/plain", "OK");
+}
+
+static void handleApplyWeather() {
+  if (server.hasArg("wth_city")) {
+    strlcpy(weatherSettings.city, server.arg("wth_city").c_str(), sizeof(weatherSettings.city));
+  }
+  if (server.hasArg("wth_lat")) weatherSettings.lat = server.arg("wth_lat").toFloat();
+  if (server.hasArg("wth_lon")) weatherSettings.lon = server.arg("wth_lon").toFloat();
+  if (server.hasArg("wth_metric")) weatherSettings.useMetric = (server.arg("wth_metric") == "1");
+  if (server.hasArg("wth_mins")) {
+    uint8_t m = (uint8_t)server.arg("wth_mins").toInt();
+    if (m >= 5 && m <= 60) weatherSettings.updateMins = m;
+  }
+  if (server.hasArg("wth_tc")) weatherSettings.tempColor = htmlToRgb565(server.arg("wth_tc").c_str());
+  if (server.hasArg("wth_ic")) weatherSettings.infoColor  = htmlToRgb565(server.arg("wth_ic").c_str());
+  invalidateWeather();  // force re-fetch with new settings
+  saveSettings();
   server.send(200, "text/plain", "OK");
 }
 
@@ -2716,6 +2813,7 @@ void initWebServer() {
   server.on("/buzzer/test", HTTP_POST, handleBuzzerTest);
   server.on("/printer/config", HTTP_GET, handlePrinterConfig);
   server.on("/apply", HTTP_POST, handleApply);
+  server.on("/apply/weather", HTTP_POST, handleApplyWeather);
   server.on("/brightness", HTTP_GET, handleBrightnessPreview);
   server.on("/status", HTTP_GET, handleStatus);
   server.on("/api/timezones", HTTP_GET, handleTimezones);

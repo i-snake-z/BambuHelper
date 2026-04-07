@@ -5,6 +5,7 @@
 #include "clock_pong.h"
 #include "clock_snake.h"
 #include "clock_pacman.h"
+#include "clock_weather.h"
 #include "icons.h"
 #include "config.h"
 #include "layout.h"
@@ -169,6 +170,7 @@ void applyDisplaySettings() {
     if (dispSettings.pongClock) resetPongClock();
     else if (dispSettings.snakeClock) resetSnakeClock();
     else if (dispSettings.pacmanClock) resetPacManClock();
+    else if (weatherSettings.enabled) resetWeatherClock();
     else resetClock();
   }
 }
@@ -1393,6 +1395,7 @@ void updateDisplay() {
     if (dispSettings.pongClock) tickPongClock();
     else if (dispSettings.snakeClock) tickSnakeClock();
     else if (dispSettings.pacmanClock) tickPacManClock();
+    else if (weatherSettings.enabled) drawWeatherClock();
   }
   unsigned long now = millis();
   unsigned long interval = gaugesAnimating ? GAUGE_ANIM_MS : DISPLAY_UPDATE_MS;
@@ -1417,6 +1420,7 @@ void updateDisplay() {
       if (dispSettings.pongClock) resetPongClock();
       else if (dispSettings.snakeClock) resetSnakeClock();
       else if (dispSettings.pacmanClock) resetPacManClock();
+      else if (weatherSettings.enabled) resetWeatherClock();
       else resetClock();
       setBacklight(getEffectiveBrightness());  // dim for screensaver
     }
@@ -1463,8 +1467,9 @@ void updateDisplay() {
       break;
 
     case SCREEN_CLOCK:
-      if (!dispSettings.pongClock && !dispSettings.snakeClock && !dispSettings.pacmanClock) drawClock();
-      // Animated screensavers are ticked before the throttle (above)
+      if (!dispSettings.pongClock && !dispSettings.snakeClock &&
+          !dispSettings.pacmanClock && !weatherSettings.enabled) drawClock();
+      // Animated screensavers (and weather clock) are ticked before the throttle (above)
       break;
 
     case SCREEN_OFF:

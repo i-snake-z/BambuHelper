@@ -104,6 +104,18 @@ struct TasmotaSettings {
   uint8_t assignedSlot;  // printer slot this plug belongs to (0, 1, ... or 255=any)
 };
 
+// Weather screensaver settings
+struct WeatherSettings {
+  bool    enabled;        // show weather clock screensaver
+  float   lat;            // latitude  (e.g. 48.8566)
+  float   lon;            // longitude (e.g. 2.3522)
+  char    city[32];       // display label shown on screen
+  bool    useMetric;      // true = °C / km/h, false = °F / mph
+  uint8_t updateMins;     // fetch interval in minutes (10-60, default 15)
+  uint16_t tempColor;     // temperature text & icon sun color
+  uint16_t infoColor;     // condition / city / extra text & cloud/rain color
+};
+
 extern char wifiSSID[33];
 extern char wifiPass[65];
 extern uint8_t brightness;
@@ -115,6 +127,7 @@ extern uint8_t buttonPin;
 extern bool btnCycleClock;
 extern BuzzerSettings buzzerSettings;
 extern TasmotaSettings tasmotaSettings;
+extern WeatherSettings weatherSettings;
 
 void loadSettings();
 void saveSettings();
