@@ -112,8 +112,12 @@ struct WeatherSettings {
   char    city[32];       // display label shown on screen
   bool    useMetric;      // true = °C / km/h, false = °F / mph
   uint8_t updateMins;     // fetch interval in minutes (10-60, default 15)
-  uint16_t tempColor;     // temperature text & icon sun color
-  uint16_t infoColor;     // condition / city / extra text & cloud/rain color
+  uint16_t tempColor;       // temperature text color
+  uint16_t cityColor;       // city label text color
+  uint16_t condColor;       // condition text color
+  uint16_t infoColor;       // (kept for compatibility / fallback)
+  uint16_t extraLabelColor; // H: / W: / FL: label color
+  uint16_t extraValueColor; // values (92%, 4km/h, 8°C) color
 };
 
 extern char wifiSSID[33];

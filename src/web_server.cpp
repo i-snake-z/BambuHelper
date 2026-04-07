@@ -502,16 +502,25 @@ R"rawliteral(
         <option value="30" %WTH_30%>Every 30 minutes</option>
         <option value="60" %WTH_60%>Every 60 minutes</option>
       </select>
-      <button type="button" class="btn btn-blue" style="margin-top:14px" onclick="applyWeather()">Save Weather Settings</button>
       <div style="margin-top:16px;padding-top:12px;border-top:1px solid #30363D">
         <h3 style="color:#58A6FF;font-size:14px;margin-bottom:10px">Colors</h3>
-        <div class="gauge-section"><h3>Temperature text color</h3><div class="color-row">
+        <div class="gauge-section"><h3>Temperature color</h3><div class="color-row">
           <label>Color</label><input type="color" id="wth_tc" value="%WTH_TC%">
         </div></div>
-        <div class="gauge-section"><h3>City / Condition / Info text color</h3><div class="color-row">
-          <label>Color</label><input type="color" id="wth_ic" value="%WTH_IC%">
+        <div class="gauge-section"><h3>City color</h3><div class="color-row">
+          <label>Color</label><input type="color" id="wth_cc" value="%WTH_CC%">
+        </div></div>
+        <div class="gauge-section"><h3>Condition color</h3><div class="color-row">
+          <label>Color</label><input type="color" id="wth_coc" value="%WTH_COC%">
+        </div></div>
+        <div class="gauge-section"><h3>Bottom line labels (H: W: FL:)</h3><div class="color-row">
+          <label>Color</label><input type="color" id="wth_el" value="%WTH_EL%">
+        </div></div>
+        <div class="gauge-section"><h3>Bottom line values (%, km/h, &deg;C)</h3><div class="color-row">
+          <label>Color</label><input type="color" id="wth_ev" value="%WTH_EV%">
         </div></div>
       </div>
+      <button type="button" class="btn btn-blue" style="margin-top:14px" onclick="applyWeather()">Save Weather Settings</button>
     </div>
   </div>
 </div>
@@ -1120,7 +1129,10 @@ function applyWeather(){
   p.append('wth_metric',document.querySelector('input[name="wth_unit"]:checked').value==='metric'?'1':'0');
   p.append('wth_mins',document.getElementById('wth_mins').value);
   p.append('wth_tc',document.getElementById('wth_tc').value);
-  p.append('wth_ic',document.getElementById('wth_ic').value);
+  p.append('wth_cc',document.getElementById('wth_cc').value);
+  p.append('wth_coc',document.getElementById('wth_coc').value);
+  p.append('wth_el',document.getElementById('wth_el').value);
+  p.append('wth_ev',document.getElementById('wth_ev').value);
   fetch('/apply/weather',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()}).then(function(r){
     if(r.ok) showToast('Weather settings saved!'); else showToast('Error saving weather settings');
   }).catch(function(e){showToast('Save failed');console.warn('applyWeather:',e);});
@@ -1559,8 +1571,12 @@ static bool resolvePlaceholder(const char* name, String& out) {
   if (strcmp(name, "WTH_15") == 0)  { out = weatherSettings.updateMins == 15 ? "selected" : ""; return true; }
   if (strcmp(name, "WTH_30") == 0)  { out = weatherSettings.updateMins == 30 ? "selected" : ""; return true; }
   if (strcmp(name, "WTH_60") == 0)  { out = weatherSettings.updateMins == 60 ? "selected" : ""; return true; }
-  if (strcmp(name, "WTH_TC") == 0)  { char buf[8]; rgb565ToHtml(weatherSettings.tempColor, buf); out = buf; return true; }
-  if (strcmp(name, "WTH_IC") == 0)  { char buf[8]; rgb565ToHtml(weatherSettings.infoColor,  buf); out = buf; return true; }
+  if (strcmp(name, "WTH_TC")  == 0) { char buf[8]; rgb565ToHtml(weatherSettings.tempColor,       buf); out = buf; return true; }
+  if (strcmp(name, "WTH_CC")  == 0) { char buf[8]; rgb565ToHtml(weatherSettings.cityColor,        buf); out = buf; return true; }
+  if (strcmp(name, "WTH_COC") == 0) { char buf[8]; rgb565ToHtml(weatherSettings.condColor,        buf); out = buf; return true; }
+  if (strcmp(name, "WTH_IC")  == 0) { char buf[8]; rgb565ToHtml(weatherSettings.infoColor,        buf); out = buf; return true; }
+  if (strcmp(name, "WTH_EL")  == 0) { char buf[8]; rgb565ToHtml(weatherSettings.extraLabelColor,  buf); out = buf; return true; }
+  if (strcmp(name, "WTH_EV")  == 0) { char buf[8]; rgb565ToHtml(weatherSettings.extraValueColor,  buf); out = buf; return true; }
   if (strcmp(name, "SLBL") == 0)  { out = dispSettings.smallLabels ? "checked" : ""; return true; }
   if (strcmp(name, "INVCOL_ROW") == 0) {
 #if defined(DISPLAY_CYD)
@@ -2043,8 +2059,11 @@ static void handleApplyWeather() {
     uint8_t m = (uint8_t)server.arg("wth_mins").toInt();
     if (m >= 5 && m <= 60) weatherSettings.updateMins = m;
   }
-  if (server.hasArg("wth_tc")) weatherSettings.tempColor = htmlToRgb565(server.arg("wth_tc").c_str());
-  if (server.hasArg("wth_ic")) weatherSettings.infoColor  = htmlToRgb565(server.arg("wth_ic").c_str());
+  if (server.hasArg("wth_tc"))  weatherSettings.tempColor       = htmlToRgb565(server.arg("wth_tc").c_str());
+  if (server.hasArg("wth_cc"))  weatherSettings.cityColor        = htmlToRgb565(server.arg("wth_cc").c_str());
+  if (server.hasArg("wth_coc")) weatherSettings.condColor        = htmlToRgb565(server.arg("wth_coc").c_str());
+  if (server.hasArg("wth_el"))  weatherSettings.extraLabelColor  = htmlToRgb565(server.arg("wth_el").c_str());
+  if (server.hasArg("wth_ev"))  weatherSettings.extraValueColor  = htmlToRgb565(server.arg("wth_ev").c_str());
   invalidateWeather();  // force re-fetch with new settings
   saveSettings();
   server.send(200, "text/plain", "OK");

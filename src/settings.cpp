@@ -365,8 +365,12 @@ void loadSettings() {
   weatherSettings.updateMins = prefs.getUChar("wth_mins", 15);
   if (weatherSettings.updateMins < 5)  weatherSettings.updateMins = 5;
   if (weatherSettings.updateMins > 60) weatherSettings.updateMins = 60;
-  weatherSettings.tempColor  = prefs.getUShort("wth_tc", CLR_TEXT);
-  weatherSettings.infoColor  = prefs.getUShort("wth_ic", CLR_TEXT_DIM);
+  weatherSettings.tempColor       = prefs.getUShort("wth_tc",  CLR_TEXT);
+  weatherSettings.cityColor        = prefs.getUShort("wth_cc",  CLR_TEXT);
+  weatherSettings.condColor        = prefs.getUShort("wth_coc", CLR_TEXT_DIM);
+  weatherSettings.infoColor        = prefs.getUShort("wth_ic",  CLR_TEXT_DIM);
+  weatherSettings.extraLabelColor  = prefs.getUShort("wth_el",  CLR_TEXT_DIM);
+  weatherSettings.extraValueColor  = prefs.getUShort("wth_ev",  CLR_TEXT);
 
   prefs.end();
 }
@@ -447,8 +451,12 @@ void saveSettings() {
   prefs.putString("wth_city", weatherSettings.city);
   prefs.putBool("wth_metric", weatherSettings.useMetric);
   prefs.putUChar("wth_mins", weatherSettings.updateMins);
-  prefs.putUShort("wth_tc", weatherSettings.tempColor);
-  prefs.putUShort("wth_ic", weatherSettings.infoColor);
+  prefs.putUShort("wth_tc",  weatherSettings.tempColor);
+  prefs.putUShort("wth_cc",  weatherSettings.cityColor);
+  prefs.putUShort("wth_coc", weatherSettings.condColor);
+  prefs.putUShort("wth_ic",  weatherSettings.infoColor);
+  prefs.putUShort("wth_el",  weatherSettings.extraLabelColor);
+  prefs.putUShort("wth_ev",  weatherSettings.extraValueColor);
 
   prefs.end();
 }

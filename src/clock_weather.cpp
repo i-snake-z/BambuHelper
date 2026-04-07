@@ -146,11 +146,14 @@ void drawWeatherClock() {
     localtime_r(&t, &now);
   }
 
-  uint16_t bg       = dispSettings.bgColor;
-  uint16_t timeClr  = dispSettings.clockTimeColor;
-  uint16_t dateClr  = dispSettings.clockDateColor;
-  uint16_t tempClr  = weatherSettings.tempColor;
-  uint16_t infoClr  = weatherSettings.infoColor;
+  uint16_t bg             = dispSettings.bgColor;
+  uint16_t timeClr        = dispSettings.clockTimeColor;
+  uint16_t dateClr        = dispSettings.clockDateColor;
+  uint16_t tempClr        = weatherSettings.tempColor;
+  uint16_t cityClr        = weatherSettings.cityColor;
+  uint16_t condClr        = weatherSettings.condColor;
+  uint16_t extraLblClr    = weatherSettings.extraLabelColor;
+  uint16_t extraValClr    = weatherSettings.extraValueColor;
 
   // --- First draw: paint the divider line and city name background area ---
   if (wck_firstDraw) {
@@ -260,7 +263,7 @@ void drawWeatherClock() {
     if (strcmp(wck_prevCity, city) != 0) {
       tft.setFreeFont(&FreeSans12pt7b);
       tft.setTextDatum(MC_DATUM);
-      tft.setTextColor(infoClr, bg);
+      tft.setTextColor(cityClr, bg);
       int cW = wck_prevCity[0] ? tft.textWidth(wck_prevCity) : 0;
       int nW = tft.textWidth(city);
       int clW = (cW > nW ? cW : nW) + 4;
@@ -277,7 +280,7 @@ void drawWeatherClock() {
     if (!loadingShown) {
       tft.setFreeFont(&FreeSans12pt7b);
       tft.setTextDatum(MC_DATUM);
-      tft.setTextColor(infoClr, bg);
+      tft.setTextColor(condClr, bg);
       tft.drawString("Fetching weather...", WCK_TEXT_CX, LY_WCK_TEMP_Y);
       loadingShown = true;
     }
@@ -293,6 +296,7 @@ void drawWeatherClock() {
   // Temperature line: "15.0°C" (font 4 + manual degree circle)
   // Font 4 only covers ASCII 32-127; degree symbol (0xB0) is drawn as a small circle.
   const char* unit  = weatherSettings.useMetric ? "C" : "F";
+  const char* wunit = weatherSettings.useMetric ? "km/h" : "mph";
   char tempBuf[16];
   snprintf(tempBuf, sizeof(tempBuf), "%.1f%s", weatherData.temp, unit); // no degree in str
   if (strcmp(wck_prevTemp, tempBuf) != 0) {
@@ -324,35 +328,56 @@ void drawWeatherClock() {
   // Condition text (font 2)
   char condBuf[48];
   strlcpy(condBuf, wmoConditionString(weatherData.weatherCode), sizeof(condBuf));
-  redrawCentredFreeText(wck_prevCond, condBuf, WCK_TEXT_CX, LY_WCK_COND_Y, &FreeSans12pt7b, infoClr, bg);
+  redrawCentredFreeText(wck_prevCond, condBuf, WCK_TEXT_CX, LY_WCK_COND_Y, &FreeSans12pt7b, condClr, bg);
   strlcpy(wck_prevCond, condBuf, sizeof(wck_prevCond));
 
   // Extra line: humidity · wind · feels-like  (FreeSans9pt7b + manual degree circle on FL)
   char extraBuf[48];
-  snprintf(extraBuf, sizeof(extraBuf), "H:%d%% W:%.0f FL:%.0f%s",
-    (int)weatherData.humidity, weatherData.windSpeed, weatherData.feelsLike, unit);
+  snprintf(extraBuf, sizeof(extraBuf), "H:%d%% W:%.0f%s FL:%.0f%s",
+    (int)weatherData.humidity, weatherData.windSpeed, wunit, weatherData.feelsLike, unit);
   if (strcmp(wck_prevExtra, extraBuf) != 0) {
     tft.setFreeFont(&FreeSans9pt7b);
     tft.setTextDatum(TL_DATUM);
-    char mainBuf[40];
-    snprintf(mainBuf, sizeof(mainBuf), "H:%d%% W:%.0f FL:%.0f",
-      (int)weatherData.humidity, weatherData.windSpeed, weatherData.feelsLike);
-    int mainW = tft.textWidth(mainBuf);
+    // Build all segments first so we can measure total width for centering
+    char hLbl[4]  = "H:";
+    char hVal[8];  snprintf(hVal,  sizeof(hVal),  "%d%%", (int)weatherData.humidity);
+    char wLbl[5]  = "  W:";
+    char wVal[16]; snprintf(wVal,  sizeof(wVal),  "%.0f%s", weatherData.windSpeed, wunit);
+    char fLbl[6]  = "  FL:";
+    char fVal[12]; snprintf(fVal,  sizeof(fVal),  "%.0f", weatherData.feelsLike);
     int unitW = tft.textWidth(unit);
     const int degR = 3, degGap = 2;
-    int totalW = mainW + degGap + degR * 2 + degGap + unitW;
+    int segW = tft.textWidth(hLbl) + tft.textWidth(hVal)
+             + tft.textWidth(wLbl) + tft.textWidth(wVal)
+             + tft.textWidth(fLbl) + tft.textWidth(fVal);
+    int totalW = segW + degGap + degR * 2 + degGap + unitW;
     int fh = tft.fontHeight();
     int topY = LY_WCK_EXTRA_Y - fh / 2;
-    int startX = WCK_TEXT_CX - totalW / 2;
-    // Clear enough for both old and new text
+    int startX = LY_W / 2 - totalW / 2;
+    // Clear enough for both old and new text (full-width row, screen centred)
     int oldW = wck_prevExtra[0] ? tft.textWidth(wck_prevExtra) + 16 : 0;
     int clrW = (oldW > totalW + 16) ? oldW : totalW + 16;
-    tft.fillRect(WCK_TEXT_CX - clrW / 2, topY - 2, clrW, fh + 4, bg);
-    // Draw main text, degree circle, unit
-    tft.setTextColor(infoClr, bg);
-    tft.drawString(mainBuf, startX, topY);
-    tft.drawCircle(startX + mainW + degGap + degR, topY + degR + 2, degR, infoClr);
-    tft.drawString(unit, startX + mainW + degGap + degR * 2 + degGap, topY);
+    tft.fillRect(LY_W / 2 - clrW / 2, topY - 2, clrW, fh + 4, bg);
+    // Draw interleaved label/value segments with different colors.
+    // Segments: "H:" val "  W:" val "  FL:" val°unit
+    // measure each segment
+    int xPos = startX;
+    struct { const char* s; uint16_t clr; } segs[] = {
+      { hLbl, extraLblClr }, { hVal, extraValClr },
+      { wLbl, extraLblClr }, { wVal, extraValClr },
+      { fLbl, extraLblClr }, { fVal, extraValClr },
+    };
+    tft.setTextDatum(TL_DATUM);
+    for (auto& seg : segs) {
+      tft.setTextColor(seg.clr, bg);
+      tft.drawString(seg.s, xPos, topY);
+      xPos += tft.textWidth(seg.s);
+    }
+    // degree circle + unit in value color
+    tft.drawCircle(xPos + degGap + degR, topY + degR + 2, degR, extraValClr);
+    xPos += degGap + degR * 2 + degGap;
+    tft.setTextColor(extraValClr, bg);
+    tft.drawString(unit, xPos, topY);
     strlcpy(wck_prevExtra, extraBuf, sizeof(wck_prevExtra));
   }
 }
