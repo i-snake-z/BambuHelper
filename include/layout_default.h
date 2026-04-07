@@ -96,7 +96,7 @@
 #define LY_WCK_DIV_Y     111    // thin divider line between date and weather
 #define LY_WCK_CITY_Y    128    // city label centre (font 2)
 #define LY_WCK_ICON_X    199    // weather icon centre X (right side, radius 35)
-#define LY_WCK_ICON_Y    175    // weather icon centre Y
+#define LY_WCK_ICON_Y    160    // weather icon centre Y
 #define LY_WCK_TEMP_Y    160    // temperature (font 4)
 #define LY_WCK_COND_Y    185    // condition text (font 2)
 #define LY_WCK_EXTRA_Y   222    // H/W/FL (font 2, full-width, below icon)

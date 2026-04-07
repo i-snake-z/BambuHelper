@@ -5,7 +5,7 @@
 #include <ArduinoJson.h>
 #include <WiFi.h>
 
-WeatherData weatherData = { false, 0, 0, 0, 0, 0, 0 };
+WeatherData weatherData = { false, true, 0, 0, 0, 0, 0, 0 };
 
 // ---------------------------------------------------------------------------
 //  WMO weather interpretation codes → short condition string
@@ -48,7 +48,7 @@ void fetchWeatherIfNeeded() {
     "http://api.open-meteo.com/v1/forecast"
     "?latitude=%.4f&longitude=%.4f"
     "&current=temperature_2m,apparent_temperature,relative_humidity_2m"
-    ",wind_speed_10m,weather_code"
+    ",wind_speed_10m,weather_code,is_day"
     "&temperature_unit=%s&wind_speed_unit=%s&timezone=auto",
     weatherSettings.lat,
     weatherSettings.lon,
@@ -86,6 +86,7 @@ void fetchWeatherIfNeeded() {
   weatherData.humidity    = cur["relative_humidity_2m"].as<float>();
   weatherData.windSpeed   = cur["wind_speed_10m"].as<float>();
   weatherData.weatherCode = cur["weather_code"].as<uint8_t>();
+  weatherData.isDay       = cur["is_day"].as<int>() != 0;
   weatherData.valid       = true;
   weatherData.lastFetchMs = millis();
 }

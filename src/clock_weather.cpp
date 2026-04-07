@@ -33,6 +33,7 @@ static char wck_prevExtra[48]  = "";
 static char wck_prevCity[32]   = "";   // file-scope so resetWeatherClock() can clear it
 static bool wck_firstDraw      = true;
 static uint8_t wck_prevCode    = 255;  // last drawn icon WMO code
+static bool    wck_prevIsDay   = true; // last drawn day/night state
 
 void resetWeatherClock() {
   wck_prevMinute  = -1;
@@ -45,6 +46,7 @@ void resetWeatherClock() {
   wck_prevExtra[0]    = '\0';
   wck_prevCity[0]     = '\0';
   wck_prevCode        = 255;
+  wck_prevIsDay       = true;
   wck_firstDraw       = true;
 }
 
@@ -104,9 +106,15 @@ static void redrawCentredFreeText(const char* oldBuf, const char* newBuf,
 //  Erases the previous icon area, then blits the PROGMEM RGB565 array.
 //  WI_TRANSP pixels are skipped (transparent).
 // ---------------------------------------------------------------------------
-static void drawWeatherIcon(uint8_t code, int cx, int cy, uint16_t bg) {
+static void drawWeatherIcon(uint8_t code, bool isDay, int cx, int cy, uint16_t bg) {
   const uint16_t* img;
-  if      (code == 0)                        img = wi_clear;
+  // Night variants for clear-sky, drizzle, and rain shower codes
+  if (!isDay && code == 0) img = wi_clear_night;
+  else if (!isDay && code == 1) img = wi_mainly_clear_night;
+  else if (!isDay && code == 2) img = wi_partly_cloudy_night;
+  else if (!isDay && code >= 51 && code <= 57) img = wi_drizzle_night;
+  else if (!isDay && code >= 80 && code <= 84) img = wi_rain_shower_night;
+  else if (code == 0)                        img = wi_clear;
   else if (code == 1)                        img = wi_mainly_clear;
   else if (code == 2)                        img = wi_partly_cloudy;
   else if (code == 3)                        img = wi_overcast;
@@ -114,7 +122,7 @@ static void drawWeatherIcon(uint8_t code, int cx, int cy, uint16_t bg) {
   else if (code >= 51 && code <= 57)         img = wi_drizzle;
   else if (code >= 61 && code <= 67)         img = wi_rain;
   else if (code >= 71 && code <= 77)         img = wi_snow;
-  else if (code >= 80 && code <= 84)         img = wi_drizzle;   // rain showers
+  else if (code >= 80 && code <= 84)         img = wi_rain_shower;
   else if (code == 85 || code == 86)         img = wi_snow;      // snow showers
   else if (code >= 95)                       img = wi_thunder;
   else                                       img = wi_overcast;  // fallback
@@ -287,10 +295,11 @@ void drawWeatherClock() {
     return;
   }
 
-  // --- Weather icon (only redraws when WMO code changes) ---
-  if (weatherData.weatherCode != wck_prevCode) {
-    drawWeatherIcon(weatherData.weatherCode, LY_WCK_ICON_X, LY_WCK_ICON_Y, bg);
-    wck_prevCode = weatherData.weatherCode;
+  // --- Weather icon (redraws when WMO code OR day/night state changes) ---
+  if (weatherData.weatherCode != wck_prevCode || weatherData.isDay != wck_prevIsDay) {
+    drawWeatherIcon(weatherData.weatherCode, weatherData.isDay, LY_WCK_ICON_X, LY_WCK_ICON_Y, bg);
+    wck_prevCode  = weatherData.weatherCode;
+    wck_prevIsDay = weatherData.isDay;
   }
 
   // Temperature line: "15.0°C" (font 4 + manual degree circle)

@@ -4,6 +4,7 @@
 // Runtime weather data (not persisted — fetched from Open-Meteo)
 struct WeatherData {
   bool     valid;
+  bool     isDay;         // true = daytime, false = night (from API is_day field)
   float    temp;          // current temperature
   float    feelsLike;     // apparent temperature
   float    humidity;      // relative humidity %
