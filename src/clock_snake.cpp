@@ -82,7 +82,6 @@ static void drawSnakeTime(bool force = false) {
     if (!force && now.tm_min == prevSMin && now.tm_hour == prevSHour) return;
 
     int stripY = SN_ROWS * SN_CELL;
-    tft.fillRect(0, stripY, SCREEN_W, SN_TIME_H, SN_CLR_BG);
 
     char buf[8];
     if (netSettings.use24h) {
@@ -93,6 +92,7 @@ static void drawSnakeTime(bool force = false) {
         snprintf(buf, sizeof(buf), "%2d:%02d", h, now.tm_min);
     }
 
+    // Draw text with background color — overwrites in-place, no fillRect flash
     tft.setTextFont(6);
     tft.setTextDatum(MC_DATUM);
     tft.setTextColor(TFT_WHITE, SN_CLR_BG);

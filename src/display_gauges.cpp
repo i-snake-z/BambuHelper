@@ -343,15 +343,9 @@ void drawEtaWidget(TFT_eSPI& tft, int16_t cx, int16_t cy, int16_t radius,
 
   if (!gaugeTextChanged(cx, cy, line1, "", forceRedraw)) return;
 
-  // Clear only what we actually draw — same safe bounds as clock widget
-  const int16_t halfW = radius + thickness + 2;
-  const int16_t topY  = cy - radius - thickness - 2;
-  const int16_t botY  = cy + radius + 6;
-  tft.fillRect(cx - halfW, topY, halfW * 2, botY - topY, bg);
-
   tft.setTextDatum(MC_DATUM);
   tft.setTextFont(4);
-  tft.setTextColor(printing ? dispSettings.eta.value : dispSettings.eta.label);
+  tft.setTextColor(printing ? dispSettings.eta.value : dispSettings.eta.label, bg);
   tft.drawString(line1, cx, cy - 4);
 
   // Label
@@ -392,12 +386,12 @@ void drawClockWidget(TFT_eSPI& tft, int16_t cx, int16_t cy, int16_t radius,
 
   // Time string — Font 4 fits "00:00" comfortably in the slot
   tft.setTextFont(4);
-  tft.setTextColor(dispSettings.clock.arc);
+  tft.setTextColor(dispSettings.clock.arc, bg);
   if (!netSettings.use24h) {
     tft.drawString(timeBuf, cx, cy - 8);
     // AM/PM below in smaller font
     tft.setTextFont(1);
-    tft.setTextColor(dispSettings.clock.value);
+    tft.setTextColor(dispSettings.clock.value, bg);
     tft.drawString(now.tm_hour < 12 ? "AM" : "PM", cx, cy + 10);
   } else {
     tft.drawString(timeBuf, cx, cy - 4);

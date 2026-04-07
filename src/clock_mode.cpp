@@ -28,9 +28,6 @@ void drawClock() {
 
   uint16_t bg = dispSettings.bgColor;
 
-  // Clear clock area
-  tft.fillRect(0, LY_CLK_CLEAR_Y, LY_W, LY_CLK_CLEAR_H, bg);
-
   // Time — large 7-segment font
   char timeBuf[12];
   if (netSettings.use24h) {
